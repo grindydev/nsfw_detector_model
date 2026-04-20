@@ -3,12 +3,11 @@
 # ============================================================
 
 import torch
-from src.cnn import SimpleCNN
-from src.data_loader import get_dataloaders
-from pathlib import Path
+from cnn import SimpleCNN
+from data_loader import get_dataloaders
 
 # ==================== PATH TO YOUR DOWNLOADED MODEL ====================
-MODEL_PATH = Path.cwd() / 'data/models/best_simple_cnn.pth'
+MODEL_PATH = Path.cwd() / 'models/best_simple_cnn_train.pth'
 
 # ==================== LOAD CHECKPOINT ====================
 # map_location='cpu' is important when loading a CUDA-trained model on Mac

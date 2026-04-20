@@ -3,7 +3,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from directory_tree import DisplayTree
-from fastai.vision.core import show_image, show_titled_image
 from torchvision import transforms
 import matplotlib.ticker as mticker
 

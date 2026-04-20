@@ -26,9 +26,9 @@ from torch import optim
 from torch.amp import autocast, GradScaler
 from torch.utils.data import Subset, DataLoader
 
-from src.data_loader import get_dataloaders
-from src.cnn import SimpleCNN
-import src.helper_utils as helper_utils
+from data_loader import get_dataloaders
+from cnn import SimpleCNN
+import helper_utils
 
 # ==================== CONFIG (EDIT ONLY THIS SECTION) ====================
 # This is the only place you need to change settings.
@@ -73,7 +73,7 @@ VAL_FRACTION = CONFIG["val_fraction"]
 TEST_FRACTION = CONFIG["test_fraction"]
 
 # File where the best model will be saved (updated live during training)
-BEST_MODEL_PATH = f"best_simple_cnn_{MODE}.pth"
+BEST_MODEL_PATH = f"models/best_simple_cnn_{MODE}.pth"
 
 print(f"🔧 CONFIG LOADED → Running in **{MODE.upper()} MODE**")
 print(f"   Best model file: {BEST_MODEL_PATH} (saved immediately when improved)")
@@ -109,21 +109,6 @@ train_loader, val_loader, test_loader, num_classes = get_dataloaders(
     val_fraction=VAL_FRACTION,
     test_fraction=TEST_FRACTION
 )
-
-# In test mode we create a small subset of training data to make experiments fast.
-if TRAIN_DATA_FRACTION < 1.0:
-    print(f"   → Fast test mode: using only {int(TRAIN_DATA_FRACTION*100)}% of training data")
-    full_dataset = train_loader.dataset
-    subset_size = int(TRAIN_DATA_FRACTION * len(full_dataset))
-    small_dataset = Subset(full_dataset, list(range(subset_size)))
-    
-    train_loader = DataLoader(
-        small_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=4,          # Good number for both Mac and Linux
-        pin_memory=is_cuda      # Only useful on CUDA (speeds up data transfer to GPU)
-    )
 
 print(f"✅ Final training set size: {len(train_loader.dataset)} images")
 
