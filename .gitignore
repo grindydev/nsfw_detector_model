@@ -1,0 +1,105 @@
+# .gitignore for Python project (PyTorch/ML-friendly)
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+tf_env/
+.venv
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Pipenv / Poetry / PDM
+Pipfile.lock
+poetry.lock
+pdm.lock
+.pdm-python
+.pdm-build/
+__pypackages__/
+
+# Jupyter / IPython
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# Logs and databases
+*.log
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.local
+
+# IDEs and editors
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+*.pt
+*.bin
+checkpoints/
+runs/
+logs/
+
+# Testing / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Sphinx documentation
+docs/_build/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+.DS_Store
+
+# Test data
+data/
