@@ -77,7 +77,7 @@ class FlexibleCNN(nn.Module):
 #   2. Builds a model with those hyperparameters
 #   3. Trains the model
 #   4. Returns the validation accuracy (what Optuna tries to maximize)
-def objective(trial, device):
+def objective(trial, device, total_trials):
     """
     Optuna objective: sample hyperparameters, train, return accuracy.
     """
@@ -114,8 +114,16 @@ def objective(trial, device):
 
     n_epochs = 10
 
-    for _ in range(n_epochs):
+    print(f"\n{'='*60}")
+    print(f"Trial {trial.number + 1}/{total_trials}")
+    print(f"  layers={n_layers} | filters={n_filters} | kernels={kernel_sizes}")
+    print(f"  lr={learning_rate:.5f} | dropout={dropout_rate:.3f} | fc_size={fc_size} | batch_size={batch_size}")
+    print(f"  train={len(train_loader.dataset)} images | val={len(val_loader.dataset)} images")
+    print(f"{'='*60}")
+
+    for epoch in range(n_epochs):
         model.train()
+        running_loss = 0.0
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad(set_to_none=True)
@@ -123,10 +131,13 @@ def objective(trial, device):
             loss = loss_fcn(outputs, labels)
             loss.backward()
             optimizer.step()
-
+            running_loss += loss.item() * images.size(0)
+        avg_loss = running_loss / len(train_loader.dataset)
+        print(f"  Epoch [{epoch+1:2d}/{n_epochs}] Loss: {avg_loss:.4f}")
 
     # --- Evaluate ---
     accuracy = helper_utils.evaluate_accuracy(model, val_loader, device)
+    print(f"  → Val Accuracy: {accuracy*100:.2f}%")
     return accuracy
 
 
@@ -138,7 +149,7 @@ study = optuna.create_study(direction='maximize')
 # Run 20 trials (each trial trains a model from scratch)
 # In practice, you'd use more trials (50-100+) for better results
 n_trials = 20
-study.optimize(lambda trial: objective(trial, device), n_trials=n_trials)
+study.optimize(lambda trial: objective(trial, device, n_trials), n_trials=n_trials)
 
 # View all trial results
 df = study.trials_dataframe()
@@ -197,8 +208,13 @@ optimizer = optim.Adam(model.parameters(), lr=best["lr"])
 loss_fcn = nn.CrossEntropyLoss()
 n_epochs = 10
 
+print(f"\n{'='*60}")
+print(f"Retraining best model for {n_epochs} epochs...")
+print(f"{'='*60}")
+
 for epoch in range(n_epochs):
     model.train()
+    running_loss = 0.0
     for images, labels in train_loader:
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad(set_to_none=True)
@@ -206,6 +222,9 @@ for epoch in range(n_epochs):
         loss = loss_fcn(outputs, labels)
         loss.backward()
         optimizer.step()
+        running_loss += loss.item() * images.size(0)
+    avg_loss = running_loss / len(train_loader.dataset)
+    print(f"  Epoch [{epoch+1:2d}/{n_epochs}] Loss: {avg_loss:.4f}")
 
 best_accuracy = helper_utils.evaluate_accuracy(model, val_loader, device)
 
