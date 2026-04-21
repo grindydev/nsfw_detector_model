@@ -104,39 +104,47 @@ def objective(trial, device, total_trials):
         batch_size=batch_size,
         val_fraction=0.15,
         test_fraction=0.0,
-        train_fraction=0.3
+        train_fraction=0.1
     )
 
     # --- Build model ---
     model = FlexibleCNN(n_layers, n_filters, kernel_sizes, dropout_rate, fc_size, num_classes).to(device)
 
-    # --- Train ---
+    # --- Train + evaluate each epoch, track best ---
     learning_rate = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     loss_fcn = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-5)
 
-    n_epochs = 5
+    n_epochs = 10
 
     print(f"\n{'='*60}")
     print(f"Trial {trial.number + 1}/{total_trials}")
     print(f"  layers={n_layers} | filters={n_filters} | kernels={kernel_sizes}")
     print(f"  lr={learning_rate:.5f} | dropout={dropout_rate:.3f} | fc_size={fc_size} | batch_size={batch_size}")
-    print(f"  train={len(train_loader.dataset)} images | val={len(val_loader.dataset)} images (30% subset)")
+    print(f"  train={len(train_loader.dataset)} images | val={len(val_loader.dataset)} images")
     print(f"{'='*60}")
 
-    helper_utils.train_model(
-        model=model,
-        train_dataloader=train_loader,
-        n_epochs=n_epochs,
-        loss_fcn=loss_fcn,
-        optimizer=optimizer,
-        device=device
-    )
+    best_trial_accuracy = 0.0
 
-    # --- Evaluate ---
-    accuracy = helper_utils.evaluate_accuracy(model, val_loader, device)
-    print(f"  → Val Accuracy: {accuracy*100:.2f}%")
-    return accuracy
+    for epoch in range(n_epochs):
+        helper_utils.train_model(
+            model=model,
+            train_dataloader=train_loader,
+            n_epochs=1,
+            loss_fcn=loss_fcn,
+            optimizer=optimizer,
+            device=device
+        )
+
+        val_accuracy = helper_utils.evaluate_accuracy(model, val_loader, device)
+        marker = " ← best so far" if val_accuracy > best_trial_accuracy else ""
+        print(f"  Epoch [{epoch+1:2d}/{n_epochs}] Val Acc: {val_accuracy*100:.2f}%{marker}")
+
+        if val_accuracy > best_trial_accuracy:
+            best_trial_accuracy = val_accuracy
+
+    print(f"  → Best Val Accuracy: {best_trial_accuracy*100:.2f}%")
+    return best_trial_accuracy
 
 
 
@@ -204,13 +212,13 @@ train_loader, val_loader, _, _ = get_dataloaders(
     train_fraction=1.0
 )
 
-optimizer = optim.AdamW(model.parameters(), lr=best["lr"], weight_decay=best["weight_decay"])
-loss_fcn = nn.CrossEntropyLoss(label_smoothing=best["label_smoothing"])
+optimizer = optim.AdamW(model.parameters(), lr=best["lr"], weight_decay=best.get("weight_decay", 0.01))
+loss_fcn = nn.CrossEntropyLoss(label_smoothing=best.get("label_smoothing", 0.0))
 n_epochs = 10
 
 print(f"\n{'='*60}")
 print(f"Retraining best model for {n_epochs} epochs on FULL data ({len(train_loader.dataset)} images)...")
-print(f"  lr={best['lr']:.5f} | weight_decay={best['weight_decay']:.5f} | label_smoothing={best['label_smoothing']:.3f}")
+print(f"  lr={best['lr']:.5f} | weight_decay={best.get('weight_decay', 0.01):.5f} | label_smoothing={best.get('label_smoothing', 0.0):.3f}")
 print(f"  dropout={best['dropout_rate']:.3f} | fc_size={best['fc_size']} | batch_size={best['batch_size']}")
 print(f"{'='*60}")
 
