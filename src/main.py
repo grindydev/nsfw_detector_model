@@ -312,3 +312,4 @@ with mlflow.start_run(run_name=f"SimpleCNN_{MODE}"):
     print(f"\n✅ Training finished in {MODE.upper()} mode!")
     print(f"   Best Validation Accuracy: {max(training_metrics[2]):.2f}%")
     print(f"   The best model was saved live to: {BEST_MODEL_PATH}")
+

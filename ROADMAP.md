@@ -101,68 +101,59 @@ nsfw_detector/
 
 ---
 
-## Phase 2 — Evaluate Baseline 🔲
+## Phase 2 — Evaluate Baseline ✅
 
 **Goal:** Measure your starting point. You can't improve what you don't measure.
 
-**Build this file:** `evaluate.py`
+**Built in:** `evaluate.py`
 
-### Step 2a — Test-set accuracy
+### What you practiced
 
-You already have `validate_epoch()` in `main.py`. After training, run it on `test_loader`:
+| Concept | Where in your code | What you learned |
+|---------|-------------------|-----------------|
+| Test set is separate from validation | `evaluate.py` — loads model, runs on test_loader only | Test set is NEVER touched during training → gives honest, unbiased performance number |
+| Overall accuracy as a single number | `evaluate.py` — `test_accuracy = 100.0 * correct / total` | 64.36% is the baseline, every future change compares to this |
+| Confusion matrix (sklearn) | `evaluate.py` + `helper_utils.py` — `confusion_matrix()`, `plot_confusion_matrix()` | Shows WHICH classes get confused: neutral ↔ sexy ↔ porn is the main problem area |
+| Per-class precision/recall/F1 | `evaluate.py` — `classification_report()` | Accuracy hides problems — porn (F1=0.73) vs neutral (F1=0.59) shows huge gap between classes |
+| MLflow experiment tracking | `main.py` — `mlflow.log_params()`, `mlflow.log_metric()`, `mlflow.log_artifact()` | Every training run is automatically logged with params + metrics, no more manual spreadsheets |
+| Config-driven hyperparameters | `main.py` — `lr`, `weight_decay`, `label_smoothing` in CONFIG dict | No more magic numbers hardcoded — single source of truth at the top of the file |
+| `torch.compile()` portability fix | `main.py` — strip `_orig_mod.` prefix before saving | Training on CUDA with compile wraps model — must clean state_dict keys for Mac/Linux compatibility |
 
-```python
-test_loss, test_acc = validate_epoch(trained_model, test_loader, loss_function, device)
-print(f"Test Accuracy: {test_acc:.2f}%")
-```
-
-This is your **baseline number**. Every future change compares against this.
-
-### Step 2b — Confusion matrix
-
-A 5×5 matrix showing where predictions go wrong:
-
-```
-                Predicted
-              draw  hentai  neutral  porn  sexy
-Actual draw [  85     12      3       0     0  ]
-      hentai[   5     90      2       1     2  ]
-      neutral[  2      1     80       8     9  ]
-      porn  [   0      1      8      75    16  ]  ← porn → sexy: 16 times!
-      sexy  [   0      3     12      18    67  ]  ← sexy → porn: 18 times!
-```
-
-You'll likely see confusion between `sexy` ↔ `porn` and `drawings` ↔ `hentai`. This tells you what to fix.
-
-**Course reference:** `L3-M4 MLflow/main.py` — has confusion matrix implementation
-
-### Step 2c — Per-class precision, recall, F1
-
-Accuracy hides problems. If 40% of images are `neutral`, a dumb model predicting "neutral" every time gets 40% accuracy. Per-class metrics reveal the truth:
+### Baseline results (5 epochs, test mode)
 
 ```
-Class       Precision  Recall  F1
-drawings      0.89     0.91   0.90
-hentai        0.85     0.88   0.86
-neutral       0.82     0.80   0.81
-porn          0.78     0.75   0.76   ← lowest, needs attention
-sexy          0.70     0.67   0.68   ← worst, model confuses with porn
+┌──────────────────────────────────────────┐
+│ BASELINE (SimpleCNN)                     │
+│ Test Accuracy:  64.36%                   │
+│ Best class:     porn    (F1=0.73)        │
+│ Worst class:    neutral (F1=0.59)        │
+│ Main confusion: neutral ↔ sexy ↔ porn    │
+│ Hentai recall:  0.57 (misses many)       │
+│ Model status:   underfitting             │
+└──────────────────────────────────────────┘
 ```
 
-**Course reference:** `L2-M1 learning_rate/main.py` — covers Precision, Recall, F1 with `torchmetrics`
-
-### Step 2d — Record baseline
-
-Write down your results for later comparison:
+**Full classification report:**
 
 ```
-┌──────────────────────────────┐
-│ BASELINE (SimpleCNN)         │
-│ Test Accuracy:  XX.XX%       │
-│ Worst class:    sexy (F1=?)  │
-│ Main confusion: sexy ↔ porn  │
-└──────────────────────────────┘
+              precision    recall  f1-score   support
+
+    drawings       0.64      0.61      0.62      1099
+      hentai       0.78      0.57      0.66      1099
+     neutral       0.57      0.61      0.59      1129
+        porn       0.71      0.75      0.73      1121
+        sexy       0.58      0.68      0.62      1152
+
+    accuracy                           0.64      5600
+   macro avg       0.66      0.64      0.64      5600
+weighted avg       0.65      0.64      0.64      5600
 ```
+
+### Key takeaways for Phase 3
+- Model is **underfitting** — 3 conv blocks may be too shallow
+- `neutral` ↔ `sexy` ↔ `porn` confusion → deeper model may help distinguish
+- `hentai` recall is low (0.57) → model misses many hentai images
+- Optuna should search: more conv blocks, wider channels, lower dropout
 
 ---
 
@@ -453,9 +444,9 @@ Load ONNX model with `onnxruntime`, preprocess image, run inference, print resul
 | Phase | Description | File to build | Course reference | Status |
 |-------|------------|---------------|-----------------|--------|
 | 1 | Build & train SimpleCNN | `main.py`, `cnn.py`, `data_loader.py` | L1-M2, L1-M3, L1-M4 | ✅ Done |
-| 2a | Test-set evaluation | `evaluate.py` | — | 🔲 |
-| 2b | Confusion matrix | `evaluate.py` | L3-M4 `MLflow/main.py` | 🔲 |
-| 2c | Per-class precision/recall/F1 | `evaluate.py` | L2-M1 `learning_rate/main.py` | 🔲 |
+| 2a | Test-set evaluation | `evaluate.py` | — | ✅ Done |
+| 2b | Confusion matrix | `evaluate.py` | L3-M4 `MLflow/main.py` | ✅ Done |
+| 2c | Per-class precision/recall/F1 | `evaluate.py` | L2-M1 `learning_rate/main.py` | ✅ Done |
 | 3 | Optuna hyperparameter tuning | `optuna.py` | L2-M1 `optuna/main.py` | 🔲 |
 | 4 | Transfer learning (ResNet18/MobileNetV3) | `transfer_cnn.py` | L2-M2 `transfer_learning/main.py` | 🔲 |
 | 5 | ResNet skip connections | modify `cnn.py` | L3-M1 `resnet/main.py` | 🔲 |
