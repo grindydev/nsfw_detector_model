@@ -120,15 +120,15 @@ MEAN_STD = [0.2896, 0.2808, 0.2854]
 # print(f" Std: {std}")
 
 
-def get_transformations(mean, std):
+def get_transformations(mean, std, size=(128, 128)):
     main_tfs = [
-        transforms.Resize((128, 128)),
+        transforms.Resize(size),
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
     ]
 
     augmentation_tfs = [
-        transforms.Resize((128, 128)),                                                                                                                                                                
+        transforms.Resize(size),                                                                                                                                                                
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(degrees=15),                                                                                                                                                        
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),                                                                                                                         

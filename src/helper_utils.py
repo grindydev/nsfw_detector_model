@@ -354,6 +354,53 @@ class NestedProgressBar:
             
 
 
+def train_model(model, train_dataloader, n_epochs, loss_fcn, optimizer, device):
+    """
+    Trains a model with nested progress bars showing epoch + batch progress.
+
+    Args:
+        model: The neural network to train.
+        train_dataloader: The DataLoader providing the training dataset.
+        n_epochs: Number of epochs to train.
+        loss_fcn: The loss function.
+        optimizer: The optimizer.
+        device: The device to run training on.
+
+    Returns:
+        List of average loss per epoch.
+    """
+    pbar = NestedProgressBar(
+        total_epochs=n_epochs,
+        total_batches=len(train_dataloader),
+        mode="train",
+    )
+
+    epoch_losses = []
+
+    for epoch in range(1, n_epochs + 1):
+        model.train()
+        running_loss = 0.0
+
+        for batch_idx, (inputs, labels) in enumerate(train_dataloader):
+            pbar.update_batch(batch_idx + 1)
+
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            outputs = model(inputs)
+            loss = loss_fcn(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item() * inputs.size(0)
+
+        avg_loss = running_loss / len(train_dataloader.dataset)
+        epoch_losses.append(avg_loss)
+
+        pbar.update_epoch(epoch, postfix_dict={"loss": f"{avg_loss:.4f}"})
+
+    pbar.close(last_message="Training complete.")
+    return epoch_losses
+
+
 def evaluate_accuracy(model, data_loader, device):
     """
     Calculates the accuracy of a model on a given dataset.
