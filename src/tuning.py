@@ -102,9 +102,9 @@ def objective(trial, device, total_trials):
 
     train_loader, val_loader, _, num_classes = get_dataloaders(
         batch_size=batch_size,
-        val_fraction=0.15,
+        val_fraction=0.1,
         test_fraction=0.0,
-        train_fraction=0.1
+        train_fraction=0.3
     )
 
     # --- Build model ---
