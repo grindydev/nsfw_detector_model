@@ -24,7 +24,7 @@ nsfw_detector/
 ├── cnn.py                  ← SimpleCNN model definition
 ├── data_loader.py          ← Custom Dataset, transforms, DataLoaders
 ├── helper_utils.py         ← Plotting, utilities
-├── optuna.py               ← (Phase 3) Hyperparameter tuning
+├── tuning.py               ← (Phase 3) Hyperparameter tuning
 ├── evaluate.py             ← (Phase 2) Test-set evaluation, metrics
 ├── grad_cam.py             ← (Phase 6) Grad-CAM visualization
 ├── predict.py              ← (Phase 7) Single image inference
@@ -157,63 +157,57 @@ weighted avg       0.65      0.64      0.64      5600
 
 ---
 
-## Phase 3 — Optuna Hyperparameter Tuning 🔲
+## Phase 3 — Optuna Hyperparameter Tuning ✅
 
 **Goal:** Push SimpleCNN to its limit by finding the best hyperparameters.
 
-**Build this file:** `optuna.py`
+**Built in:** `tuning.py`
 
-### What to tune
+### What you practiced
 
-| Parameter | Search space | Impact |
-|-----------|-------------|--------|
-| Learning rate | `1e-4` to `1e-2` (log scale) | 🔴 Highest — too high diverges, too low crawls |
-| Weight decay | `1e-5` to `1e-1` (log scale) | 🟡 Regularization strength |
-| Dropout | `0.2` to `0.7` | 🟡 Classifier regularization |
-| Batch size | `32, 64, 128` | 🟡 Affects gradient quality |
-| Num conv blocks | `2, 3, 4, 5` | 🟡 Model depth |
-| Channels | `16→32→64` vs `32→64→128` vs `64→128→256` | 🟡 Model width |
-| Kernel size | `3, 5` | 🟢 Receptive field |
+| Concept | Where in your code | What you learned |
+|---------|-------------------|-----------------|
+| Flexible CNN architecture | `tuning.py` — `FlexibleCNN` with dynamic layers, filters, kernels | Model structure doesn't have to be fixed — can be controlled by parameters |
+| Optuna objective function | `tuning.py` — `objective(trial)` | Each trial samples hyperparameters, trains, returns a score — Optuna maximizes it |
+| Search space design | `tuning.py` — `trial.suggest_int`, `suggest_float`, `suggest_categorical` | Different param types need different suggest methods; log scale for lr |
+| `AdaptiveAvgPool2d` for variable-depth models | `tuning.py` — classifier starts with `AdaptiveAvgPool2d((1,1))` | Variable conv layers → variable spatial size → must squash to fixed size before Linear |
+| MaxPool2d spatial shrinking | Bug: 5 layers × MaxPool2d → 2×2 → kernel doesn't fit → crash | Each MaxPool2d halves spatial size: 128→64→32→16→8→4. Too many layers = too small |
+| BatchNorm in conv blocks | `tuning.py` — `nn.BatchNorm2d(out_channels)` | Stabilizes training, especially important when trying many different architectures |
+| Optuna study + trials | `tuning.py` — `optuna.create_study`, `study.optimize` | Study = container for trials; direction='maximize' tells Optuna to find highest accuracy |
+| Saving Optuna study | `tuning.py` — `study.save("models/optuna_study.db")` | Can reload later with `optuna.load_study()` to analyze without retraining |
+| Retraining best model | `tuning.py` — rebuild with best params, train again, save checkpoint | Optuna only remembers hyperparameters, not the model. Must retrain with best params to get a usable model |
+| Progress tracking | `tuning.py` — print trial params, epoch loss, val accuracy per trial | 20 trials × 10 epochs = long running; console output lets you monitor progress |
+| Dropout must use sampled value | Bug: hardcoded `p=0.6` instead of `p=self.dropout_rate` | If dropout isn't wired to Optuna's suggestion, it wastes trials searching a value that's ignored |
 
-### How Optuna works
+### Search space used
 
-```python
-def objective(trial):
-    # 1. Suggest hyperparameters
-    lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
-    dropout = trial.suggest_float("dropout", 0.2, 0.7)
-    n_blocks = trial.suggest_int("n_blocks", 2, 5)
-    
-    # 2. Build model with these params
-    model = FlexibleCNN(num_blocks=n_blocks, dropout=dropout, ...)
-    
-    # 3. Train for a few epochs
-    # 4. Return validation accuracy
-    return val_accuracy
-
-study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=50)
-```
-
-### Phase 2 insights guide Phase 3
-
-After seeing the confusion matrix, you know:
-- If `sexy` ↔ `porn` confusion is the main problem → try deeper model (more blocks)
-- If model overfits (train loss ↓ val loss ↑) → increase dropout/weight decay
-- If model underfits (both losses high) → more channels, lower dropout
-
-**Course reference:** `L2-M1 optuna/main.py` — **exact match**, shows flexible CNN + Optuna search
+| Parameter | Search space | Type |
+|-----------|-------------|------|
+| Learning rate | `1e-4` to `1e-2` (log scale) | `suggest_float(log=True)` |
+| Num conv blocks | 2 to 5 | `suggest_int` |
+| Filters per layer | 16 to 128 per layer | `suggest_int` per layer |
+| Kernel size per layer | 3 or 5 per layer | `suggest_categorical` |
+| Dropout | 0.1 to 0.5 | `suggest_float` |
+| FC layer size | 64 to 256 | `suggest_int` |
+| Batch size | 32, 64, 128 | `suggest_categorical` |
 
 ### After Optuna — record results
 
 ```
-┌──────────────────────────────┐
-│ OPTUNA (Tuned SimpleCNN)     │
-│ Test Accuracy:  XX.XX%       │
-│ Best params:    lr=?, ...    │
-│ Improvement:    +X.X%        │
-└──────────────────────────────┘
+┌──────────────────────────────────────┐
+│ OPTUNA (Tuned FlexibleCNN)           │
+│ Best Accuracy:  XX.XX%               │
+│ Best params:    (see study results)  │
+│ Improvement vs baseline:  +X.X%      │
+│ Model saved:    best_flexible_cnn.pth│
+│ Study saved:    optuna_study.db      │
+└──────────────────────────────────────┘
 ```
+
+### Key takeaways for Phase 4
+- Optuna pushed SimpleCNN architecture to its limit
+- Transfer learning (Phase 4) will likely give the biggest accuracy jump
+- Compare Optuna's best vs transfer learning to see if custom CNN can compete with pretrained
 
 ---
 
@@ -447,7 +441,7 @@ Load ONNX model with `onnxruntime`, preprocess image, run inference, print resul
 | 2a | Test-set evaluation | `evaluate.py` | — | ✅ Done |
 | 2b | Confusion matrix | `evaluate.py` | L3-M4 `MLflow/main.py` | ✅ Done |
 | 2c | Per-class precision/recall/F1 | `evaluate.py` | L2-M1 `learning_rate/main.py` | ✅ Done |
-| 3 | Optuna hyperparameter tuning | `optuna.py` | L2-M1 `optuna/main.py` | 🔲 |
+| 3 | Optuna hyperparameter tuning | `tuning.py` | L2-M1 `optuna/main.py` | ✅ Done |
 | 4 | Transfer learning (ResNet18/MobileNetV3) | `transfer_cnn.py` | L2-M2 `transfer_learning/main.py` | 🔲 |
 | 5 | ResNet skip connections | modify `cnn.py` | L3-M1 `resnet/main.py` | 🔲 |
 | 6 | Grad-CAM interpretability | `grad_cam.py` | L3-M2 `saliency_and_class_activation_map/main.py` | 🔲 |

@@ -42,7 +42,7 @@ class FlexibleCNN(nn.Module):
                     in_channels,
                     out_channels,
                     kernel_size,
-                    padding,
+                    padding=padding,
                 ),
                 nn.BatchNorm2d(out_channels),
                 nn.ReLU(),
