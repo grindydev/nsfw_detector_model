@@ -85,15 +85,16 @@ def objective(trial, device, total_trials):
     # trial.suggest_int: pick an integer in the given range
     n_layers = trial.suggest_int("n_layers", 2, 5)
 
-    # Each layer can have a different number of filters
-    n_filters = [trial.suggest_int(f"n_filters_{i}", 16, 128) for i in range(n_layers)]
+    # Each layer picks from GPU-friendly powers of 2
+    FILTER_CHOICES = [16, 32, 64, 128]
+    n_filters = [trial.suggest_categorical(f"n_filters_{i}", FILTER_CHOICES) for i in range(n_layers)]
 
-    # Each layer can have kernel size 3 or 5
-    kernel_sizes = [trial.suggest_categorical(f"kernel_size_{i}", [3, 5]) for i in range(n_layers)]
+    # Fixed kernel=3 everywhere — simpler, faster, sufficient for NSFW patterns
+    kernel_sizes = [3] * n_layers
 
     # --- Sample classifier hyperparameters ---
     dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
-    fc_size = trial.suggest_int("fc_size", 64, 256)
+    fc_size = trial.suggest_categorical("fc_size", [64, 128, 256])
 
     # -- Load Data
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
@@ -174,7 +175,7 @@ plt.show()
 
 # Parallel coordinate plot: see all hyperparameter combinations at once
 ax = optuna.visualization.matplotlib.plot_parallel_coordinate(
-    study, params=['n_layers', 'n_filters_0', 'kernel_size_0', 'dropout_rate', 'fc_size']
+    study, params=['n_layers', 'n_filters_0', 'dropout_rate', 'fc_size']
 )
 fig = ax.figure
 fig.set_size_inches(12, 6, forward=True)
@@ -189,8 +190,9 @@ print("✅ Optuna study saved to models/optuna_study.db")
 
 # Rebuild with best params
 n_layers = best["n_layers"]
+FILTER_CHOICES = [16, 32, 64, 128]
 n_filters = [best[f"n_filters_{i}"] for i in range(n_layers)]
-kernel_sizes = [best[f"kernel_size_{i}"] for i in range(n_layers)]
+kernel_sizes = [3] * n_layers
 
 model = FlexibleCNN(
     n_layers, n_filters, kernel_sizes,
@@ -200,7 +202,7 @@ model = FlexibleCNN(
 # Retrain with best hyperparameters
 train_loader, val_loader, _, _ = get_dataloaders(
     batch_size=best["batch_size"],
-    val_fraction=0.1,
+    val_fraction=0.2,
     test_fraction=0.0
 )
 
