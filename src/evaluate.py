@@ -7,8 +7,12 @@ from cnn import SimpleCNN
 from data_loader import get_dataloaders
 from pathlib import Path
 
+from helper_utils import plot_confusion_matrix
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report 
+
 # ==================== PATH TO YOUR DOWNLOADED MODEL ====================
-MODEL_PATH = Path.cwd() / 'models/best_simple_cnn.pth'
+MODEL_PATH = Path.cwd() / 'models/best_simple_cnn_train.pth'
 
 # ==================== LOAD CHECKPOINT ====================
 # map_location='cpu' is important when loading a CUDA-trained model on Mac
@@ -45,6 +49,9 @@ _, _, test_loader, _ = get_dataloaders(
 correct = 0
 total = 0
 
+all_preds = []
+all_labels = []
+
 with torch.no_grad():
     for images, labels in test_loader:
         images = images.to(device)
@@ -53,10 +60,20 @@ with torch.no_grad():
         outputs = model(images)
         _, predicted = torch.max(outputs, 1)
         
+        all_preds.extend(predicted.cpu().tolist())
+        all_labels.extend(labels.cpu().tolist())
+
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
 
 test_accuracy = 100.0 * correct / total
 print(f"\n📊 Test Accuracy on full test set: {test_accuracy:.2f}%")
+
+cm = confusion_matrix(all_labels, all_preds)
+CLASS_NAMES = ['drawings', 'hentai', 'neutral', 'porn', 'sexy']                                                                                                                                       
+
+print(classification_report(all_labels, all_preds, target_names=CLASS_NAMES)) 
+
+plot_confusion_matrix(cm, CLASS_NAMES)
 
 

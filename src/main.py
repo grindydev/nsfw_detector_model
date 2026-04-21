@@ -246,9 +246,16 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
             best_epoch = epoch + 1
             best_model_state = copy.deepcopy(model.state_dict())
 
+            # Strip _orig_mod. prefix from torch.compile() so checkpoint
+            # is portable to machines without compile (Mac MPS/CPU)
+            clean_state = {
+                k.replace("_orig_mod.", ""): v
+                for k, v in model.state_dict().items()
+            }
+
             # Save to disk right now
             torch.save({
-                'model_state_dict': model.state_dict(),   # current best weights
+                'model_state_dict': clean_state,           # clean weights, no compile prefix
                 'num_classes': num_classes,
                 'val_accuracy': best_val_accuracy,
                 'epoch': best_epoch,

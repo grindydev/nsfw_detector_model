@@ -121,5 +121,5 @@ def plot_confusion_matrix(cm, class_names):
     plt.xlabel('Predicted label')
     filename = 'data/confusion_matrix.png'
     plt.savefig(filename, dpi=200)
-    plt.close()
+    plt.show()
     return filename
