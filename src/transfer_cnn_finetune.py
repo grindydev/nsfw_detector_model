@@ -21,7 +21,7 @@ main_transform, transform_with_augmentation = get_transformations(IMAGENET_MEAN,
 
 
 train_loader, val_loader, test_loader, num_classes = get_dataloaders(
-    batch_size=32,
+    batch_size=64,
     val_fraction=0.15,
     test_fraction=0.2,
     main_transform=main_transform,
@@ -48,13 +48,14 @@ print("Model's New Output Layer:")
 print(resnet18_model.fc)
 
 loss_function = torch.nn.CrossEntropyLoss()
-optimizer = optim.AdamW(resnet18_model.parameters(), lr=1e-5, weight_decay=0.05)
+optimizer = optim.AdamW(filter(lambda p: p.requires_grad, resnet18_model.parameters()),
+                        lr=1e-5, weight_decay=0.05)
 
 # ==================== TRAINING ====================
 print(f"\n{'='*60}")
 print(f"Transfer Learning — Strategy 1: Feature Extraction")
 print(f"  train={len(train_loader.dataset)} images | val={len(val_loader.dataset)} images")
-print(f"  batch_size=32 | lr=0.00001 | optimizer=AdamW")
+print(f"  batch_size=64 | lr=0.00001 | optimizer=AdamW")
 print(f"  input=224×224 | normalization=ImageNet")
 print(f"{'='*60}")
 
