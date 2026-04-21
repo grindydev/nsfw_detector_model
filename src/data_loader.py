@@ -147,7 +147,8 @@ main_transform, transform_with_augmentation = get_transformations(MEAN, MEAN_STD
 def get_dataloaders(batch_size, val_fraction, test_fraction, dataset=nswf_dataset,
                     main_transform=main_transform,
                     augmentation_transform=transform_with_augmentation,
-                    train_fraction=1.0):
+                    train_fraction=1.0,
+                    num_workers=1):
     
     dataset=nswf_dataset
     total_size = len(dataset)
@@ -169,9 +170,12 @@ def get_dataloaders(batch_size, val_fraction, test_fraction, dataset=nswf_datase
     test_dataset = SubsetWithTransform(subset=test_dataset, transform=main_transform)
 
 
-    train_loader = DataLoader(train_dataset, batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size, shuffle=True,
+                              num_workers=num_workers, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size, shuffle=False,
+                            num_workers=num_workers, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size, shuffle=False,
+                             num_workers=num_workers, pin_memory=True)
 
     num_classes = len(dataset.classes)
 

@@ -102,9 +102,10 @@ def objective(trial, device, total_trials):
 
     train_loader, val_loader, _, num_classes = get_dataloaders(
         batch_size=batch_size,
-        val_fraction=0.1,
+        val_fraction=0.15,
         test_fraction=0.0,
-        train_fraction=0.3
+        train_fraction=0.3,
+        num_workers=4
     )
 
     # --- Build model ---
@@ -209,7 +210,8 @@ train_loader, val_loader, _, _ = get_dataloaders(
     batch_size=best["batch_size"],
     val_fraction=0.15,
     test_fraction=0.0,
-    train_fraction=1.0
+    train_fraction=1.0,
+    num_workers=4
 )
 
 optimizer = optim.AdamW(model.parameters(), lr=best["lr"], weight_decay=best.get("weight_decay", 0.01))
