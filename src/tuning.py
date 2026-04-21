@@ -100,8 +100,8 @@ def objective(trial, device, total_trials):
 
     train_loader, val_loader, _, num_classes = get_dataloaders(
     batch_size=batch_size,
-    val_fraction=0.2,
-    test_fraction=0.0
+    val_fraction=0.05, # validate = 5%
+    test_fraction=0.6 # train = 35%
     )
 
     # --- Build model ---
@@ -201,7 +201,7 @@ model = FlexibleCNN(
 train_loader, val_loader, _, _ = get_dataloaders(
     batch_size=best["batch_size"],
     val_fraction=0.1,
-    test_fraction=0.5
+    test_fraction=0.0
 )
 
 optimizer = optim.Adam(model.parameters(), lr=best["lr"])
