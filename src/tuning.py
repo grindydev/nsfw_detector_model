@@ -10,15 +10,17 @@ import joblib
 import torch.nn.functional as F
 from pprint import pprint
 
-helper_utils.set_seed(15)
+def main():
+    helper_utils.set_seed(15)
 
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-elif torch.backends.mps.is_available():
-    device = torch.device('mps')
-else:
-    device = torch.device('cpu')
-print(device)
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')
+    else:
+        device = torch.device('cpu')
+    print(device)
+    return device
 
 
 # ==================== STEP 1: FLEXIBLE CNN ARCHITECTURE ====================
@@ -150,97 +152,100 @@ def objective(trial, device, total_trials):
 
 
 # ==================== STEP 3: RUN THE OPTIMIZATION ====================
-# Create an Optuna study that tries to MAXIMIZE accuracy
-study = optuna.create_study(direction='maximize')
+if __name__ == '__main__':
+    device = main()
 
-# Run 20 trials with subset data for fast iteration
-n_trials = 20
-study.optimize(lambda trial: objective(trial, device, n_trials), n_trials=n_trials)
+    # Create an Optuna study that tries to MAXIMIZE accuracy
+    study = optuna.create_study(direction='maximize')
 
-# View all trial results
-df = study.trials_dataframe()
+    # Run 20 trials with subset data for fast iteration
+    n_trials = 20
+    study.optimize(lambda trial: objective(trial, device, n_trials), n_trials=n_trials)
 
-# Print the best result
-best_trial = study.best_trial
-print("Best trial:")
-print(f"  Value (Accuracy): {best_trial.value:.4f}")
-print("  Hyperparameters:")
-pprint(best_trial.params)
+    # View all trial results
+    df = study.trials_dataframe()
+
+    # Print the best result
+    best_trial = study.best_trial
+    print("Best trial:")
+    print(f"  Value (Accuracy): {best_trial.value:.4f}")
+    print("  Hyperparameters:")
+    pprint(best_trial.params)
 
 
-# ==================== STEP 4: VISUALIZE RESULTS ====================
-# How accuracy improved over trials
-optuna.visualization.matplotlib.plot_optimization_history(study)
-plt.title('Optimization History')
-plt.show()
+    # ==================== STEP 4: VISUALIZE RESULTS ====================
+    # How accuracy improved over trials
+    optuna.visualization.matplotlib.plot_optimization_history(study)
+    plt.title('Optimization History')
+    plt.show()
 
-# Which hyperparameters mattered most?
-optuna.visualization.matplotlib.plot_param_importances(study)
-plt.show()
+    # Which hyperparameters mattered most?
+    optuna.visualization.matplotlib.plot_param_importances(study)
+    plt.show()
 
-# Parallel coordinate plot: see all hyperparameter combinations at once
-ax = optuna.visualization.matplotlib.plot_parallel_coordinate(
-    study, params=['n_layers', 'n_filters_0', 'dropout_rate', 'fc_size']
-)
-fig = ax.figure
-fig.set_size_inches(12, 6, forward=True)
-fig.tight_layout()
+    # Parallel coordinate plot: see all hyperparameter combinations at once
+    ax = optuna.visualization.matplotlib.plot_parallel_coordinate(
+        study, params=['n_layers', 'n_filters_0', 'dropout_rate', 'fc_size']
+    )
+    fig = ax.figure
+    fig.set_size_inches(12, 6, forward=True)
+    fig.tight_layout()
 
-# ==================== SAVE RESULTS ====================
-best = study.best_trial.params
+    # ==================== SAVE RESULTS ====================
+    best = study.best_trial.params
 
-# Save Optuna study database (can reload later)
-import joblib
-joblib.dump(study, "models/optuna_study.pkl")
-print("✅ Optuna study saved to models/optuna_study.pkl")
+    # Save Optuna study database (can reload later)
+    import joblib
+    joblib.dump(study, "models/optuna_study.pkl")
+    print("✅ Optuna study saved to models/optuna_study.pkl")
 
-# Rebuild with best params
-n_layers = best["n_layers"]
-FILTER_CHOICES = [16, 32, 64, 128]
-n_filters = [best[f"n_filters_{i}"] for i in range(n_layers)]
-kernel_sizes = [3] * n_layers
+    # Rebuild with best params
+    n_layers = best["n_layers"]
+    FILTER_CHOICES = [16, 32, 64, 128]
+    n_filters = [best[f"n_filters_{i}"] for i in range(n_layers)]
+    kernel_sizes = [3] * n_layers
 
-model = FlexibleCNN(
-    n_layers, n_filters, kernel_sizes,
-    best["dropout_rate"], best["fc_size"], num_classes=5
-).to(device)
+    model = FlexibleCNN(
+        n_layers, n_filters, kernel_sizes,
+        best["dropout_rate"], best["fc_size"], num_classes=5
+    ).to(device)
 
-# Retrain with best hyperparameters on FULL data
-train_loader, val_loader, _, _ = get_dataloaders(
-    batch_size=best["batch_size"],
-    val_fraction=0.15,
-    test_fraction=0.0,
-    train_fraction=1.0,
-    num_workers=4
-)
+    # Retrain with best hyperparameters on FULL data
+    train_loader, val_loader, _, _ = get_dataloaders(
+        batch_size=best["batch_size"],
+        val_fraction=0.15,
+        test_fraction=0.0,
+        train_fraction=1.0,
+        num_workers=4
+    )
 
-optimizer = optim.AdamW(model.parameters(), lr=best["lr"], weight_decay=best.get("weight_decay", 0.01))
-loss_fcn = nn.CrossEntropyLoss(label_smoothing=best.get("label_smoothing", 0.0))
-n_epochs = 10
+    optimizer = optim.AdamW(model.parameters(), lr=best["lr"], weight_decay=best.get("weight_decay", 0.01))
+    loss_fcn = nn.CrossEntropyLoss(label_smoothing=best.get("label_smoothing", 0.0))
+    n_epochs = 10
 
-print(f"\n{'='*60}")
-print(f"Retraining best model for {n_epochs} epochs on FULL data ({len(train_loader.dataset)} images)...")
-print(f"  lr={best['lr']:.5f} | weight_decay={best.get('weight_decay', 0.01):.5f} | label_smoothing={best.get('label_smoothing', 0.0):.3f}")
-print(f"  dropout={best['dropout_rate']:.3f} | fc_size={best['fc_size']} | batch_size={best['batch_size']}")
-print(f"{'='*60}")
+    print(f"\n{'='*60}")
+    print(f"Retraining best model for {n_epochs} epochs on FULL data ({len(train_loader.dataset)} images)...")
+    print(f"  lr={best['lr']:.5f} | weight_decay={best.get('weight_decay', 0.01):.5f} | label_smoothing={best.get('label_smoothing', 0.0):.3f}")
+    print(f"  dropout={best['dropout_rate']:.3f} | fc_size={best['fc_size']} | batch_size={best['batch_size']}")
+    print(f"{'='*60}")
 
-helper_utils.train_model(
-    model=model,
-    train_dataloader=train_loader,
-    n_epochs=n_epochs,
-    loss_fcn=loss_fcn,
-    optimizer=optimizer,
-    device=device
-)
+    helper_utils.train_model(
+        model=model,
+        train_dataloader=train_loader,
+        n_epochs=n_epochs,
+        loss_fcn=loss_fcn,
+        optimizer=optimizer,
+        device=device
+    )
 
-best_accuracy = helper_utils.evaluate_accuracy(model, val_loader, device)
+    best_accuracy = helper_utils.evaluate_accuracy(model, val_loader, device)
 
-# Save checkpoint (same format as main.py so evaluate.py can load it)
-torch.save({
-    'model_state_dict': model.state_dict(),
-    'num_classes': 5,
-    'val_accuracy': best_accuracy * 100,
-    'epoch': n_epochs,
-    'best_params': best,
-}, 'models/best_flexible_cnn.pth')
-print(f"✅ Best model saved to models/best_flexible_cnn.pth (accuracy: {best_accuracy*100:.2f}%)")
+    # Save checkpoint (same format as main.py so evaluate.py can load it)
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'num_classes': 5,
+        'val_accuracy': best_accuracy * 100,
+        'epoch': n_epochs,
+        'best_params': best,
+    }, 'models/best_flexible_cnn.pth')
+    print(f"✅ Best model saved to models/best_flexible_cnn.pth (accuracy: {best_accuracy*100:.2f}%)")
