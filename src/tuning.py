@@ -96,13 +96,14 @@ def objective(trial, device, total_trials):
     dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
     fc_size = trial.suggest_categorical("fc_size", [64, 128, 256])
 
-    # -- Load Data
+    # -- Load Data (subset for fast Optuna trials)
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
 
     train_loader, val_loader, _, num_classes = get_dataloaders(
-    batch_size=batch_size,
-    val_fraction=0.15,
-    test_fraction=0.0
+        batch_size=batch_size,
+        val_fraction=0.15,
+        test_fraction=0.0,
+        train_fraction=0.3
     )
 
     # --- Build model ---
@@ -113,13 +114,13 @@ def objective(trial, device, total_trials):
     loss_fcn = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    n_epochs = 10
+    n_epochs = 5
 
     print(f"\n{'='*60}")
     print(f"Trial {trial.number + 1}/{total_trials}")
     print(f"  layers={n_layers} | filters={n_filters} | kernels={kernel_sizes}")
     print(f"  lr={learning_rate:.5f} | dropout={dropout_rate:.3f} | fc_size={fc_size} | batch_size={batch_size}")
-    print(f"  train={len(train_loader.dataset)} images | val={len(val_loader.dataset)} images")
+    print(f"  train={len(train_loader.dataset)} images | val={len(val_loader.dataset)} images (30% subset)")
     print(f"{'='*60}")
 
     helper_utils.train_model(
@@ -142,9 +143,8 @@ def objective(trial, device, total_trials):
 # Create an Optuna study that tries to MAXIMIZE accuracy
 study = optuna.create_study(direction='maximize')
 
-# Run 20 trials (each trial trains a model from scratch)
-# In practice, you'd use more trials (50-100+) for better results
-n_trials = 20
+# Run 10 trials with subset data for fast iteration
+n_trials = 10
 study.optimize(lambda trial: objective(trial, device, n_trials), n_trials=n_trials)
 
 # View all trial results
@@ -194,19 +194,20 @@ model = FlexibleCNN(
     best["dropout_rate"], best["fc_size"], num_classes=5
 ).to(device)
 
-# Retrain with best hyperparameters
+# Retrain with best hyperparameters on FULL data
 train_loader, val_loader, _, _ = get_dataloaders(
     batch_size=best["batch_size"],
-    val_fraction=0.2,
-    test_fraction=0.0
+    val_fraction=0.15,
+    test_fraction=0.0,
+    train_fraction=1.0
 )
 
 optimizer = optim.Adam(model.parameters(), lr=best["lr"])
 loss_fcn = nn.CrossEntropyLoss()
-n_epochs = 10
+n_epochs = 15
 
 print(f"\n{'='*60}")
-print(f"Retraining best model for {n_epochs} epochs...")
+print(f"Retraining best model for {n_epochs} epochs on FULL data ({len(train_loader.dataset)} images)...")
 print(f"{'='*60}")
 
 helper_utils.train_model(

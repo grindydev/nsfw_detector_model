@@ -40,27 +40,23 @@ new_fc_layer = nn.Linear(in_features=num_features, out_features=num_classes)
 resnet18_model.fc = new_fc_layer
 resnet18_model.to(device)
 
-for name, param in resnet18_model.named_parameters():
-    if 'layer4' not in name and 'fc' not in name:
-        param.requires_grad = False
 
 print("Model's New Output Layer:")
 print(resnet18_model.fc)
 
 loss_function = torch.nn.CrossEntropyLoss()
-optimizer = optim.AdamW(filter(lambda p: p.requires_grad, resnet18_model.parameters()),
-                        lr=1e-5, weight_decay=0.05)
+optimizer = optim.AdamW(filter(lambda p: p.requires_grad, resnet18_model.parameters()), lr=1e-5, weight_decay=0.05)
 
 # ==================== TRAINING ====================
 print(f"\n{'='*60}")
-print(f"Transfer Learning — Strategy 2: Fine-Tuning: Unfreeze the top layers, train them + new head")
+print(f"Transfer Learning — Strategy 3: Full Retraining")
 print(f"  train={len(train_loader.dataset)} images | val={len(val_loader.dataset)} images")
 print(f"  batch_size=64 | lr=0.00001 | optimizer=AdamW")
 print(f"  input=224×224 | normalization=ImageNet")
 print(f"{'='*60}")
 
 best_accuracy = 0.0
-num_epochs = 10
+num_epochs = 5
 
 for epoch in range(num_epochs):
     helper_utils.train_model(
@@ -80,9 +76,9 @@ for epoch in range(num_epochs):
            'num_classes': num_classes,
            'val_accuracy': best_accuracy * 100,
            'epoch': epoch + 1,
-        }, 'models/best_transfer_cnn.pth')
+        }, 'models/best_transfer_cnn_fulltrain.pth')
         print(f"  → New best model saved ({best_accuracy*100:.2f}%)")
 
 print(f"\n✅ Training finished! Best accuracy: {best_accuracy*100:.2f}%")
-print(f"   Model saved to: models/best_transfer_cnn.pth")
+print(f"   Model saved to: models/best_transfer_cnn_fulltrain.pth")
 

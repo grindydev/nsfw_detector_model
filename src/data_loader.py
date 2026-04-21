@@ -146,7 +146,8 @@ main_transform, transform_with_augmentation = get_transformations(MEAN, MEAN_STD
 
 def get_dataloaders(batch_size, val_fraction, test_fraction, dataset=nswf_dataset,
                     main_transform=main_transform,
-                    augmentation_transform=transform_with_augmentation):
+                    augmentation_transform=transform_with_augmentation,
+                    train_fraction=1.0):
     
     dataset=nswf_dataset
     total_size = len(dataset)
@@ -157,6 +158,11 @@ def get_dataloaders(batch_size, val_fraction, test_fraction, dataset=nswf_datase
     train_dataset, val_dataset, test_dataset = random_split(
         dataset, [train_size, val_size, test_size]
     )
+
+    # Use only a fraction of training data (for fast Optuna trials)
+    if train_fraction < 1.0:
+        subset_size = int(len(train_dataset) * train_fraction)
+        train_dataset = Subset(train_dataset, range(subset_size))
 
     train_dataset = SubsetWithTransform(subset=train_dataset, transform=augmentation_transform)
     val_dataset = SubsetWithTransform(subset=val_dataset, transform=main_transform)
