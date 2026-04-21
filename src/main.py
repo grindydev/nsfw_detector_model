@@ -29,6 +29,7 @@ from torch.utils.data import Subset, DataLoader
 from data_loader import get_dataloaders
 from cnn import SimpleCNN
 import helper_utils
+import mlflow
 
 # ==================== CONFIG (EDIT ONLY THIS SECTION) ====================
 # This is the only place you need to change settings.
@@ -44,11 +45,17 @@ CONFIG = {
     "val_fraction": 0.15,              # Fraction of dataset used for validation (15%)
     "test_fraction": 0.2,              # Fraction of dataset used for testing (20%)
 
+    "lr": 1e-3,                        # Learning rate
+    "weight_decay": 0.05,               # L2 regularization (AdamW handles this properly)
+    "label_smoothing": 0.1,             # Prevents overconfident predictions
+    "optimizer": "AdamW",
+    "scheduler": "CosineAnnealingLR",
+
     # Settings used when mode = "test" (fast development)
     "test": {
         "num_epochs": 5,               # Very few epochs so you can test changes quickly
-        "train_data_fraction": 0.25,   # Use only 25% of training images → much faster on Mac
-        "batch_size": 32,              # Smaller batch fits easily in Mac memory
+        "train_data_fraction": 0.05,   # Use only 5% of training images → much faster on Mac
+        "batch_size": 64,              # Smaller batch fits easily in Mac memory
         "patience": 3                  # Stop early if no improvement
     },
 
@@ -71,6 +78,9 @@ BATCH_SIZE = SETTINGS["batch_size"]
 PATIENCE = SETTINGS["patience"]
 VAL_FRACTION = CONFIG["val_fraction"]
 TEST_FRACTION = CONFIG["test_fraction"]
+LR = CONFIG["lr"]
+WEIGHT_DECAY = CONFIG["weight_decay"]
+LABEL_SMOOTHING = CONFIG["label_smoothing"]
 
 # File where the best model will be saved (updated live during training)
 BEST_MODEL_PATH = f"models/best_simple_cnn_{MODE}.pth"
@@ -116,10 +126,10 @@ print(f"✅ Final training set size: {len(train_loader.dataset)} images")
 model = SimpleCNN(num_classes=num_classes)
 
 # CrossEntropyLoss with label smoothing prevents the model from becoming over-confident
-loss_function = nn.CrossEntropyLoss(label_smoothing=0.1)
+loss_function = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
 
 # AdamW is better than Adam when using weight decay (stronger regularization)
-optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.05)
+optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
 # Cosine Annealing gradually reduces learning rate → helps converge better
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-6)
@@ -188,6 +198,9 @@ def validate_epoch(model, val_loader, loss_function, device):
     return (running_val_loss / len(val_loader.dataset)), (100.0 * correct / total)
 
 
+# ==================== SETUP MLFLOW ====================
+mlflow.set_experiment("NSFW_Detector")
+
 # ==================== TRAINING LOOP WITH IMMEDIATE BEST-MODEL SAVING ====================
 def training_loop(model, train_loader, val_loader, loss_function, optimizer, scheduler,
                   num_epochs, device, scaler, use_amp):
@@ -200,7 +213,7 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
     train_losses, val_losses, val_accuracies = [], [], []
 
     print("\n" + "="*70)
-    print(f"🚀 TRAINING STARTED — {MODE.upper()} MODE")
+    print(f"🚀 TRAINING STARTED - {MODE.upper()} MODE")
     print(f"Device: {device} | Epochs: {num_epochs} | Best model saved live to {BEST_MODEL_PATH}")
     print("="*70)
 
@@ -217,6 +230,10 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
               f"Train Loss: {epoch_loss:.4f} | "
               f"Val Loss: {epoch_val_loss:.4f} | "
               f"Val Acc: {epoch_accuracy:6.2f}% | LR: {current_lr:.6f}")
+
+        mlflow.log_metric("train_loss", epoch_loss, step=epoch)
+        mlflow.log_metric("val_loss", epoch_val_loss, step=epoch)
+        mlflow.log_metric("val_accuracy", epoch_accuracy, step=epoch)
 
         scheduler.step()
 
@@ -256,21 +273,35 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
 
 
 # ==================== RUN TRAINING ====================
-trained_model, training_metrics = training_loop(
-    model=model,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    loss_function=loss_function,
-    optimizer=optimizer,
-    scheduler=scheduler,
-    num_epochs=NUM_EPOCHS,
-    device=device,
-    scaler=scaler,
-    use_amp=use_amp
-)
+with mlflow.start_run(run_name=f"SimpleCNN_{MODE}"):
+    mlflow.log_params({
+        "mode": MODE,
+        "num_epochs": NUM_EPOCHS,
+        "batch_size": BATCH_SIZE,
+        "lr": LR,
+        "weight_decay": WEIGHT_DECAY,
+        "label_smoothing": LABEL_SMOOTHING,
+        "patience": PATIENCE,
+        "optimizer": CONFIG["optimizer"],
+        "scheduler": CONFIG["scheduler"],
+    })
 
-helper_utils.plot_training_metrics(training_metrics)
+    trained_model, training_metrics = training_loop(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        loss_function=loss_function,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        num_epochs=NUM_EPOCHS,
+        device=device,
+        scaler=scaler,
+        use_amp=use_amp
+    )
 
-print(f"\n✅ Training finished in {MODE.upper()} mode!")
-print(f"   Best Validation Accuracy: {max(training_metrics[2]):.2f}%")
-print(f"   The best model was saved live to: {BEST_MODEL_PATH}")
+    helper_utils.plot_training_metrics(training_metrics)
+    mlflow.log_artifact(BEST_MODEL_PATH)
+
+    print(f"\n✅ Training finished in {MODE.upper()} mode!")
+    print(f"   Best Validation Accuracy: {max(training_metrics[2]):.2f}%")
+    print(f"   The best model was saved live to: {BEST_MODEL_PATH}")

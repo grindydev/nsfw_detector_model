@@ -5,9 +5,10 @@
 import torch
 from cnn import SimpleCNN
 from data_loader import get_dataloaders
+from pathlib import Path
 
 # ==================== PATH TO YOUR DOWNLOADED MODEL ====================
-MODEL_PATH = Path.cwd() / 'models/best_simple_cnn_train.pth'
+MODEL_PATH = Path.cwd() / 'models/best_simple_cnn.pth'
 
 # ==================== LOAD CHECKPOINT ====================
 # map_location='cpu' is important when loading a CUDA-trained model on Mac
@@ -57,3 +58,5 @@ with torch.no_grad():
 
 test_accuracy = 100.0 * correct / total
 print(f"\n📊 Test Accuracy on full test set: {test_accuracy:.2f}%")
+
+
