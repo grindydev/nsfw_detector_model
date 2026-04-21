@@ -101,8 +101,8 @@ def objective(trial, device, total_trials):
 
     train_loader, val_loader, _, num_classes = get_dataloaders(
     batch_size=batch_size,
-    val_fraction=0.05, # validate = 5%
-    test_fraction=0.6 # train = 35%
+    val_fraction=0.15,
+    test_fraction=0.0
     )
 
     # --- Build model ---
@@ -122,19 +122,14 @@ def objective(trial, device, total_trials):
     print(f"  train={len(train_loader.dataset)} images | val={len(val_loader.dataset)} images")
     print(f"{'='*60}")
 
-    for epoch in range(n_epochs):
-        model.train()
-        running_loss = 0.0
-        for images, labels in train_loader:
-            images, labels = images.to(device), labels.to(device)
-            optimizer.zero_grad(set_to_none=True)
-            outputs = model(images)
-            loss = loss_fcn(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item() * images.size(0)
-        avg_loss = running_loss / len(train_loader.dataset)
-        print(f"  Epoch [{epoch+1:2d}/{n_epochs}] Loss: {avg_loss:.4f}")
+    helper_utils.train_model(
+        model=model,
+        train_dataloader=train_loader,
+        n_epochs=n_epochs,
+        loss_fcn=loss_fcn,
+        optimizer=optimizer,
+        device=device
+    )
 
     # --- Evaluate ---
     accuracy = helper_utils.evaluate_accuracy(model, val_loader, device)
@@ -214,19 +209,14 @@ print(f"\n{'='*60}")
 print(f"Retraining best model for {n_epochs} epochs...")
 print(f"{'='*60}")
 
-for epoch in range(n_epochs):
-    model.train()
-    running_loss = 0.0
-    for images, labels in train_loader:
-        images, labels = images.to(device), labels.to(device)
-        optimizer.zero_grad(set_to_none=True)
-        outputs = model(images)
-        loss = loss_fcn(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item() * images.size(0)
-    avg_loss = running_loss / len(train_loader.dataset)
-    print(f"  Epoch [{epoch+1:2d}/{n_epochs}] Loss: {avg_loss:.4f}")
+helper_utils.train_model(
+    model=model,
+    train_dataloader=train_loader,
+    n_epochs=n_epochs,
+    loss_fcn=loss_fcn,
+    optimizer=optimizer,
+    device=device
+)
 
 best_accuracy = helper_utils.evaluate_accuracy(model, val_loader, device)
 
