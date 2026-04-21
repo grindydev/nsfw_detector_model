@@ -96,7 +96,7 @@ def objective(trial, device, total_trials):
     fc_size = trial.suggest_int("fc_size", 64, 256)
 
     # -- Load Data
-    batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
+    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
 
     train_loader, val_loader, _, num_classes = get_dataloaders(
     batch_size=batch_size,
