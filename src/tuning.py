@@ -6,6 +6,7 @@ from data_loader import get_dataloaders
 import optuna
 import matplotlib.pyplot as plt
 import helper_utils
+import joblib
 import torch.nn.functional as F
 from pprint import pprint
 
@@ -143,8 +144,8 @@ def objective(trial, device, total_trials):
 # Create an Optuna study that tries to MAXIMIZE accuracy
 study = optuna.create_study(direction='maximize')
 
-# Run 10 trials with subset data for fast iteration
-n_trials = 10
+# Run 20 trials with subset data for fast iteration
+n_trials = 20
 study.optimize(lambda trial: objective(trial, device, n_trials), n_trials=n_trials)
 
 # View all trial results
@@ -180,8 +181,9 @@ fig.tight_layout()
 best = study.best_trial.params
 
 # Save Optuna study database (can reload later)
-study.save("models/optuna_study.db")
-print("✅ Optuna study saved to models/optuna_study.db")
+import joblib
+joblib.dump(study, "models/optuna_study.pkl")
+print("✅ Optuna study saved to models/optuna_study.pkl")
 
 # Rebuild with best params
 n_layers = best["n_layers"]
@@ -202,12 +204,14 @@ train_loader, val_loader, _, _ = get_dataloaders(
     train_fraction=1.0
 )
 
-optimizer = optim.Adam(model.parameters(), lr=best["lr"])
-loss_fcn = nn.CrossEntropyLoss()
-n_epochs = 15
+optimizer = optim.AdamW(model.parameters(), lr=best["lr"], weight_decay=best["weight_decay"])
+loss_fcn = nn.CrossEntropyLoss(label_smoothing=best["label_smoothing"])
+n_epochs = 10
 
 print(f"\n{'='*60}")
 print(f"Retraining best model for {n_epochs} epochs on FULL data ({len(train_loader.dataset)} images)...")
+print(f"  lr={best['lr']:.5f} | weight_decay={best['weight_decay']:.5f} | label_smoothing={best['label_smoothing']:.3f}")
+print(f"  dropout={best['dropout_rate']:.3f} | fc_size={best['fc_size']} | batch_size={best['batch_size']}")
 print(f"{'='*60}")
 
 helper_utils.train_model(

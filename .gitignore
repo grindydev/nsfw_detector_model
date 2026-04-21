@@ -103,3 +103,5 @@ dmypy.json
 
 # Test data
 data/
+
+grad_cam_results/
