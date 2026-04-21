@@ -189,8 +189,8 @@ model = FlexibleCNN(
 # Retrain with best hyperparameters
 train_loader, val_loader, _, _ = get_dataloaders(
     batch_size=best["batch_size"],
-    val_fraction=0.2,
-    test_fraction=0.0
+    val_fraction=0.1,
+    test_fraction=0.5
 )
 
 optimizer = optim.Adam(model.parameters(), lr=best["lr"])
