@@ -34,17 +34,17 @@ class OptunaSimpleCNN(nn.Module):
         super(OptunaSimpleCNN, self).__init__()
         self.classess = num_classes
 
-        # Architecture found by Optuna: 5 layers, filters [16, 16, 128, 64, 128]
-        self.conv_block1 = CNNBlock(in_channels=3, out_channels=16)
-        self.conv_block2 = CNNBlock(in_channels=16, out_channels=16)
-        self.conv_block3 = CNNBlock(in_channels=16, out_channels=128)
-        self.conv_block4 = CNNBlock(in_channels=128, out_channels=64)
-        self.conv_block5 = CNNBlock(in_channels=64, out_channels=128)
+        # Architecture found by Optuna: 5 layers, filters [32, 64, 128, 128, 256]
+        self.conv_block1 = CNNBlock(in_channels=3, out_channels=32)
+        self.conv_block2 = CNNBlock(in_channels=32, out_channels=64)
+        self.conv_block3 = CNNBlock(in_channels=64, out_channels=128)
+        self.conv_block4 = CNNBlock(in_channels=128, out_channels=128)
+        self.conv_block5 = CNNBlock(in_channels=128, out_channels=256)
 
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(start_dim=1),
-            nn.Linear(128, 256),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Dropout(p=0.358),
             nn.Linear(256, num_classes)
