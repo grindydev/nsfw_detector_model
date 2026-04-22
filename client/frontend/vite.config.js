@@ -6,6 +6,10 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
+      '/predict-video': {
+        target: 'http://localhost:8000',
+        // SSE must not be buffered by the proxy
+      },
       '/predict': 'http://localhost:8000',
     }
   }
