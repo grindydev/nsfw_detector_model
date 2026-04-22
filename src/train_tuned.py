@@ -29,7 +29,7 @@ imagenet_main_transform, imagenet_augmentation_transform = get_transformations(
 
 # ==================== CONFIG (EDIT ONLY THIS SECTION) ====================
 CONFIG = {
-    "mode": "train",                    # "test" = fast dev on Mac | "train" = full training on GTX 1650
+    "mode": "train",                    # "test" = fast dev mode | "train" = full training
 
     "device": "auto",
 
@@ -154,7 +154,7 @@ def main():
             device = torch.device("cuda")
             is_cuda = True
             torch.backends.cudnn.benchmark = True
-            print("🚀 Auto-detected NVIDIA GPU (GTX 1650) → using CUDA")
+            print("🚀 Auto-detected NVIDIA GPU → using CUDA")
         elif torch.backends.mps.is_available():
             device = torch.device("mps")
             is_cuda = False

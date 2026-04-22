@@ -14,7 +14,7 @@
 # Key learning concepts covered:
 #   • Config-driven design (easy to switch between testing and full training)
 #   • Immediate best-model checkpointing
-#   • Device-aware training (Mac Mini MPS vs Ubuntu GTX 1650)
+#   • Device-aware training (MPS / CUDA / CPU)
 #   • Mixed Precision (AMP) for speed
 #   • Subset training for fast testing
 #   • Early stopping + Cosine LR scheduler
@@ -33,14 +33,14 @@ import mlflow
 
 # ==================== CONFIG (EDIT ONLY THIS SECTION) ====================
 # This is the only place you need to change settings.
-# It makes the code very readable and reusable across your Mac Mini and Ubuntu PC.
+# It makes the code very readable and reusable across different machines.
 CONFIG = {
-    "mode": "test",                    # ← Change to "train" when you want full training on Ubuntu
-                                       # "test"  = fast development on Mac Mini
-                                       # "train" = full serious training on GTX 1650
+    "mode": "test",                    # ← Change to "train" when you want full training
+                                       # "test"  = fast development mode
+                                       # "train" = full serious training
 
     "device": "auto",                  # "auto", "cuda", "mps", or "cpu"
-                                       # "auto" is recommended - it picks the best available hardware
+                                       # "auto" is recommended - picks best available hardware
 
     "val_fraction": 0.15,              # Fraction of dataset used for validation (15%)
     "test_fraction": 0.2,              # Fraction of dataset used for testing (20%)
@@ -54,8 +54,8 @@ CONFIG = {
     # Settings used when mode = "test" (fast development)
     "test": {
         "num_epochs": 5,               # Very few epochs so you can test changes quickly
-        "train_data_fraction": 0.05,   # Use only 5% of training images → much faster on Mac
-        "batch_size": 64,              # Smaller batch fits easily in Mac memory
+        "train_data_fraction": 0.05,   # Use only 5% of training images → much faster
+        "batch_size": 64,              # Smaller batch fits easily in memory
         "patience": 3                  # Stop early if no improvement
     },
 
@@ -63,7 +63,7 @@ CONFIG = {
     "train": {
         "num_epochs": 40,              # Enough epochs for the model to learn well
         "train_data_fraction": 1.0,    # Use 100% of the training data
-        "batch_size": 64,              # Larger batch = better GPU utilization on GTX 1650
+        "batch_size": 64,              # Larger batch = better GPU utilization
         "patience": 8                  # More patience during long training
     }
 }
@@ -89,14 +89,14 @@ print(f"🔧 CONFIG LOADED → Running in **{MODE.upper()} MODE**")
 print(f"   Best model file: {BEST_MODEL_PATH} (saved immediately when improved)")
 
 # ==================== DEVICE SETUP ====================
-# Why this matters: You can develop on Mac Mini (MPS) and train on Ubuntu (CUDA)
+# Why this matters: You can develop on one machine and train on another
 # without changing any code except the CONFIG.
 if CONFIG["device"] == "auto":
     if torch.cuda.is_available():
         device = torch.device("cuda")
         is_cuda = True
         torch.backends.cudnn.benchmark = True          # Speeds up convolution operations on NVIDIA
-        print("🚀 Auto-detected NVIDIA GPU (GTX 1650) → using CUDA")
+        print("🚀 Auto-detected NVIDIA GPU → using CUDA")
     elif torch.backends.mps.is_available():
         device = torch.device("mps")
         is_cuda = False
@@ -247,7 +247,7 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
             best_model_state = copy.deepcopy(model.state_dict())
 
             # Strip _orig_mod. prefix from torch.compile() so checkpoint
-            # is portable to machines without compile (Mac MPS/CPU)
+            # is portable to machines without compile support
             clean_state = {
                 k.replace("_orig_mod.", ""): v
                 for k, v in model.state_dict().items()

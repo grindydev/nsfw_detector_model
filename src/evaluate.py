@@ -1,5 +1,5 @@
 # ============================================================
-# test_model.py - Load model trained on Ubuntu GTX 1650 → Run on Mac Mini M1
+# evaluate.py - Load trained model and evaluate on test set
 # ============================================================
 
 import torch
@@ -17,7 +17,7 @@ from sklearn.metrics import classification_report
 MODEL_PATH = Path.cwd() / 'models/best_simple_cnn_train.pth'
 
 # ==================== LOAD CHECKPOINT ====================
-# map_location='cpu' is important when loading a CUDA-trained model on Mac
+# map_location handles loading a CUDA-trained model on CPU/MPS
 
 checkpoint = torch.load(MODEL_PATH, map_location='cpu')
 
@@ -56,7 +56,7 @@ model.load_state_dict(state_dict)
 model.eval()                                      # Important: set to evaluation mode
 print("   Model is now in eval mode (ready for inference)")
 
-# ==================== DEVICE (Auto for Mac Mini M1) ====================
+# ==================== DEVICE (Auto-detect) ====================
 device = torch.device("cuda" if torch.cuda.is_available() else 
                      "mps" if torch.backends.mps.is_available() else "cpu")
 
