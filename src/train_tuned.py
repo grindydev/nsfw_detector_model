@@ -1,12 +1,12 @@
 # ============================================================
-# train_cnn_optuna.py - Training pipeline for Optuna-tuned model
+# train_tuned.py - Training pipeline for TunedCNN
 # ============================================================
 #
 # Based on train results from Optuna study:
 #   layers=5 | filters=[16, 16, 128, 64, 128] | lr=0.000345
 #   dropout=0.358 | fc_size=256 | batch_size=16 | weight_decay=0.01
 #
-# Same structure as main.py but uses OptunaSimpleCNN + Optuna params
+# Same structure as main.py but uses TunedCNN + tuned params
 
 import copy
 import torch
@@ -16,7 +16,7 @@ from torch.amp import autocast, GradScaler
 from torch.utils.data import Subset, DataLoader
 
 from data_loader import get_dataloaders, get_transformations
-from cnn_optuna import OptunaSimpleCNN
+from cnn_tuned import TunedCNN
 import helper_utils
 import mlflow
 
@@ -181,7 +181,7 @@ def main():
     print(f"✅ Final training set size: {len(train_loader.dataset)} images")
 
     # ==================== MODEL, LOSS, OPTIMIZER, SCHEDULER ====================
-    model = OptunaSimpleCNN(num_classes=num_classes)
+    model = TunedCNN(num_classes=num_classes)
 
     loss_function = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
     optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
@@ -199,7 +199,7 @@ def main():
         pass
 
     # ==================== RUN TRAINING ====================
-    with mlflow.start_run(run_name=f"OptunaSimpleCNN_{MODE}"):
+    with mlflow.start_run(run_name=f"TunedCNN_{MODE}"):
         mlflow.log_params({
             "mode": MODE,
             "num_epochs": NUM_EPOCHS,
@@ -210,7 +210,7 @@ def main():
             "patience": PATIENCE,
             "optimizer": CONFIG["optimizer"],
             "scheduler": CONFIG["scheduler"],
-            "model": "OptunaSimpleCNN",
+            "model": "TunedCNN",
             "architecture": "5 layers [32,64,128,128,256] dropout=0.358 fc=256",
         })
 
@@ -247,7 +247,7 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
     train_losses, val_losses, val_accuracies = [], [], []
 
     print("\n" + "="*70)
-    print(f"🚀 TRAINING STARTED — {MODE.upper()} MODE (OptunaSimpleCNN)")
+    print(f"🚀 TRAINING STARTED — {MODE.upper()} MODE (TunedCNN)")
     print(f"Device: {device} | Epochs: {num_epochs} | Best model saved live to {BEST_MODEL_PATH}")
     print("="*70)
 
@@ -288,7 +288,7 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
                 'val_accuracy': best_val_accuracy,
                 'epoch': best_epoch,
                 'mode': MODE,
-                'model_type': 'OptunaSimpleCNN',
+                'model_type': 'TunedCNN',
             }, BEST_MODEL_PATH)
 
             print(f"  → New best model saved to {BEST_MODEL_PATH} "
