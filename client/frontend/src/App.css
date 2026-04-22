@@ -32,7 +32,32 @@ h1 {
 .subtitle {
   text-align: center;
   color: #94a3b8;
-  margin-bottom: 32px;
+  margin-bottom: 16px;
+}
+
+/* Model info badges */
+.model-info {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.model-badge {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #1e293b;
+  color: #64748b;
+  border: 1px solid #334155;
+  letter-spacing: 0.3px;
+}
+
+.model-badge.model-name {
+  color: #3b82f6;
+  border-color: #3b82f644;
+  font-weight: 600;
 }
 
 /* Dropzone */
@@ -363,9 +388,46 @@ h1 {
 .flagged-section h3 {
   font-size: 0.9rem;
   color: #94a3b8;
-  margin-bottom: 16px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.flagged-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.flagged-header h3 {
+  margin-bottom: 0;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.filter-tab {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filter-tab:hover {
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.filter-tab.active {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #3b82f615;
 }
 
 .flagged-grid {

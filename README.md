@@ -48,6 +48,7 @@ data/
 
 ```bash
 # 1. Export model to ONNX (one time)
+#    Auto-detects model type (SimpleCNN / TunedCNN / ResidualTunedCNN / ResNet18)
 cd src/
 python export_onnx.py
 
@@ -57,7 +58,13 @@ pip install -r requirements.txt
 python start.py
 ```
 
-Open http://localhost:3000 — upload an image to classify it.
+Open http://localhost:3000 — upload an **image** to classify, or a **video** to scan frame-by-frame for NSFW content.
+
+**Prerequisite:** `ffmpeg` must be installed for video scanning.
+```bash
+brew install ffmpeg      # Mac
+sudo apt install ffmpeg  # Linux
+```
 
 ### Train a Model
 
@@ -104,9 +111,9 @@ python tuning.py          # Optuna searches best architecture
 │   └── helper_utils.py           # Progress bars, plotting, utilities
 │
 ├── client/
-│   ├── server.py                 # FastAPI backend (ONNX inference)
+│   ├── server.py                 # FastAPI backend (image + video inference)
 │   ├── start.py                  # One-command launcher
-│   └── frontend/                 # React frontend
+│   └── frontend/                 # React frontend (image + video upload)
 │
 ├── documents/
 │   └── phase5_residual_connections.md
@@ -131,6 +138,8 @@ python tuning.py          # Optuna searches best architecture
 - fastapi
 - uvicorn
 - onnxruntime
+- Pillow
+- ffmpeg (system install, for video scanning)
 - Node.js 18+ (frontend)
 
 ## What I Learned
