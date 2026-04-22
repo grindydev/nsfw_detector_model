@@ -30,6 +30,12 @@ from data_loader import get_dataloaders
 from cnn import SimpleCNN
 import helper_utils
 import mlflow
+import warnings
+import logging
+
+# Suppress MLflow internal noise (warnings, deprecation notices, etc.)
+warnings.filterwarnings("ignore", message=".*mlflow.*", category=FutureWarning)
+logging.getLogger("mlflow").setLevel(logging.ERROR)
 
 # ==================== CONFIG (EDIT ONLY THIS SECTION) ====================
 # This is the only place you need to change settings.
@@ -199,7 +205,15 @@ def validate_epoch(model, val_loader, loss_function, device):
 
 
 # ==================== SETUP MLFLOW ====================
-mlflow.set_experiment("NSFW_Detector")
+try:
+    mlflow.set_tracking_uri("mlruns")
+    mlflow.set_experiment("NSFW_Detector")
+    _mlflow_ok = True
+except Exception as e:
+    print(f"⚠️  MLflow setup failed ({e}). Training will continue without logging.")
+    _mlflow_ok = False
+    warnings.filterwarnings("ignore")
+    logging.getLogger("mlflow").setLevel(logging.CRITICAL)
 
 # ==================== TRAINING LOOP WITH IMMEDIATE BEST-MODEL SAVING ====================
 def training_loop(model, train_loader, val_loader, loss_function, optimizer, scheduler,
@@ -231,9 +245,12 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
               f"Val Loss: {epoch_val_loss:.4f} | "
               f"Val Acc: {epoch_accuracy:6.2f}% | LR: {current_lr:.6f}")
 
-        mlflow.log_metric("train_loss", epoch_loss, step=epoch)
-        mlflow.log_metric("val_loss", epoch_val_loss, step=epoch)
-        mlflow.log_metric("val_accuracy", epoch_accuracy, step=epoch)
+        try:
+            mlflow.log_metric("train_loss", epoch_loss, step=epoch)
+            mlflow.log_metric("val_loss", epoch_val_loss, step=epoch)
+            mlflow.log_metric("val_accuracy", epoch_accuracy, step=epoch)
+        except Exception:
+            pass
 
         scheduler.step()
 
@@ -280,36 +297,53 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
 
 
 # ==================== RUN TRAINING ====================
-with mlflow.start_run(run_name=f"SimpleCNN_{MODE}"):
-    mlflow.log_params({
-        "mode": MODE,
-        "num_epochs": NUM_EPOCHS,
-        "batch_size": BATCH_SIZE,
-        "lr": LR,
-        "weight_decay": WEIGHT_DECAY,
-        "label_smoothing": LABEL_SMOOTHING,
-        "patience": PATIENCE,
-        "optimizer": CONFIG["optimizer"],
-        "scheduler": CONFIG["scheduler"],
-    })
+try:
+    mlflow_run = mlflow.start_run(run_name=f"SimpleCNN_{MODE}") if _mlflow_ok else None
+except Exception:
+    mlflow_run = None
 
-    trained_model, training_metrics = training_loop(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        loss_function=loss_function,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        num_epochs=NUM_EPOCHS,
-        device=device,
-        scaler=scaler,
-        use_amp=use_amp
-    )
+try:
+    if mlflow_run:
+        mlflow.log_params({
+            "mode": MODE,
+            "num_epochs": NUM_EPOCHS,
+            "batch_size": BATCH_SIZE,
+            "lr": LR,
+            "weight_decay": WEIGHT_DECAY,
+            "label_smoothing": LABEL_SMOOTHING,
+            "patience": PATIENCE,
+            "optimizer": CONFIG["optimizer"],
+            "scheduler": CONFIG["scheduler"],
+        })
+except Exception as e:
+    print(f"⚠️  MLflow log_params failed: {e}")
 
+trained_model, training_metrics = training_loop(
+    model=model,
+    train_loader=train_loader,
+    val_loader=val_loader,
+    loss_function=loss_function,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    num_epochs=NUM_EPOCHS,
+    device=device,
+    scaler=scaler,
+    use_amp=use_amp
+)
+
+try:
     helper_utils.plot_training_metrics(training_metrics)
-    mlflow.log_artifact(BEST_MODEL_PATH)
+except Exception as e:
+    print(f"⚠️  Plotting failed: {e}")
 
-    print(f"\n✅ Training finished in {MODE.upper()} mode!")
-    print(f"   Best Validation Accuracy: {max(training_metrics[2]):.2f}%")
-    print(f"   The best model was saved live to: {BEST_MODEL_PATH}")
+try:
+    if mlflow_run:
+        mlflow.log_artifact(BEST_MODEL_PATH)
+        mlflow.end_run()
+except Exception as e:
+    print(f"⚠️  MLflow log_artifact failed: {e}")
+
+print(f"\n✅ Training finished in {MODE.upper()} mode!")
+print(f"   Best Validation Accuracy: {max(training_metrics[2]):.2f}%")
+print(f"   The best model was saved live to: {BEST_MODEL_PATH}")
 
