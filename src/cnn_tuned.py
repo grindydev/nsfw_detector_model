@@ -1,5 +1,5 @@
-# cnn_optuna.py — Optuna-tuned architecture
-# Best params from Optuna study
+# cnn_tuned.py — TunedCNN architecture
+# Optimized by Optuna hyperparameter search
 
 import torch
 import torch.nn as nn
@@ -29,9 +29,9 @@ class CNNBlock(nn.Module):
         return x
 
 
-class OptunaSimpleCNN(nn.Module):
+class TunedCNN(nn.Module):
     def __init__(self, num_classes=5):
-        super(OptunaSimpleCNN, self).__init__()
+        super(TunedCNN, self).__init__()
         self.classess = num_classes
 
         # Architecture found by Optuna: 5 layers, filters [32, 64, 128, 128, 256]
