@@ -16,6 +16,12 @@ from data_loader import get_dataloaders, get_transformations
 from residual_cnn_tuned import ResidualTunedCNN
 import helper_utils
 import mlflow
+import warnings
+import logging
+
+# Suppress MLflow internal noise (warnings, deprecation notices, etc.)
+warnings.filterwarnings("ignore", message=".*mlflow.*", category=FutureWarning)
+logging.getLogger("mlflow").setLevel(logging.ERROR)
 
 # ==================== IMAGENET TRANSFORMS (224×224) ====================
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -140,7 +146,15 @@ def validate_epoch(model, val_loader, loss_function, device, epoch, num_epochs):
 
 
 # ==================== SETUP MLFLOW ====================
-mlflow.set_experiment("NSFW_Detector_Residual")
+try:
+    mlflow.set_tracking_uri("mlruns")
+    mlflow.set_experiment("NSFW_Detector_Residual")
+    _mlflow_ok = True
+except Exception as e:
+    print(f"⚠️  MLflow setup failed ({e}). Training will continue without logging.")
+    _mlflow_ok = False
+    warnings.filterwarnings("ignore")
+    logging.getLogger("mlflow").setLevel(logging.CRITICAL)
 
 
 # ==================== MAIN ====================
@@ -197,41 +211,58 @@ def main():
         pass
 
     # ==================== RUN TRAINING ====================
-    with mlflow.start_run(run_name=f"ResidualTunedCNN_{MODE}"):
-        mlflow.log_params({
-            "mode": MODE,
-            "num_epochs": NUM_EPOCHS,
-            "batch_size": BATCH_SIZE,
-            "lr": LR,
-            "weight_decay": WEIGHT_DECAY,
-            "label_smoothing": LABEL_SMOOTHING,
-            "patience": PATIENCE,
-            "optimizer": CONFIG["optimizer"],
-            "scheduler": CONFIG["scheduler"],
-            "model": "ResidualTunedCNN",
-            "architecture": "5 residual blocks [32,64,128,128,256] dropout=0.358 fc=256",
-        })
+    try:
+        mlflow_run = mlflow.start_run(run_name=f"ResidualTunedCNN_{MODE}") if _mlflow_ok else None
+    except Exception:
+        mlflow_run = None
 
-        trained_model, training_metrics = training_loop(
-            model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            loss_function=loss_function,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            num_epochs=NUM_EPOCHS,
-            device=device,
-            scaler=scaler,
-            use_amp=use_amp,
-            num_classes=num_classes
-        )
+    try:
+        if mlflow_run:
+            mlflow.log_params({
+                "mode": MODE,
+                "num_epochs": NUM_EPOCHS,
+                "batch_size": BATCH_SIZE,
+                "lr": LR,
+                "weight_decay": WEIGHT_DECAY,
+                "label_smoothing": LABEL_SMOOTHING,
+                "patience": PATIENCE,
+                "optimizer": CONFIG["optimizer"],
+                "scheduler": CONFIG["scheduler"],
+                "model": "ResidualTunedCNN",
+                "architecture": "5 residual blocks [32,64,128,128,256] dropout=0.358 fc=256",
+            })
+    except Exception as e:
+        print(f"⚠️  MLflow log_params failed: {e}")
 
+    trained_model, training_metrics = training_loop(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        loss_function=loss_function,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        num_epochs=NUM_EPOCHS,
+        device=device,
+        scaler=scaler,
+        use_amp=use_amp,
+        num_classes=num_classes
+    )
+
+    try:
         helper_utils.plot_training_metrics(training_metrics)
-        mlflow.log_artifact(BEST_MODEL_PATH)
+    except Exception as e:
+        print(f"⚠️  Plotting failed: {e}")
 
-        print(f"\n✅ Training finished in {MODE.upper()} mode!")
-        print(f"   Best Validation Accuracy: {max(training_metrics[2]):.2f}%")
-        print(f"   The best model was saved live to: {BEST_MODEL_PATH}")
+    try:
+        if mlflow_run:
+            mlflow.log_artifact(BEST_MODEL_PATH)
+            mlflow.end_run()
+    except Exception as e:
+        print(f"⚠️  MLflow log_artifact failed: {e}")
+
+    print(f"\n✅ Training finished in {MODE.upper()} mode!")
+    print(f"   Best Validation Accuracy: {max(training_metrics[2]):.2f}%")
+    print(f"   The best model was saved live to: {BEST_MODEL_PATH}")
 
 
 def training_loop(model, train_loader, val_loader, loss_function, optimizer, scheduler,
@@ -264,9 +295,12 @@ def training_loop(model, train_loader, val_loader, loss_function, optimizer, sch
               f"Val Loss: {epoch_val_loss:.4f} | "
               f"Val Acc: {epoch_accuracy:6.2f}% | LR: {current_lr:.6f}{marker}")
 
-        mlflow.log_metric("train_loss", epoch_loss, step=epoch)
-        mlflow.log_metric("val_loss", epoch_val_loss, step=epoch)
-        mlflow.log_metric("val_accuracy", epoch_accuracy, step=epoch)
+        try:
+            mlflow.log_metric("train_loss", epoch_loss, step=epoch)
+            mlflow.log_metric("val_loss", epoch_val_loss, step=epoch)
+            mlflow.log_metric("val_accuracy", epoch_accuracy, step=epoch)
+        except Exception:
+            pass
 
         scheduler.step()
 
