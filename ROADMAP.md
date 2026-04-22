@@ -19,19 +19,32 @@ A hands-on exercise that practices the full PyTorch image classification pipelin
 
 ```
 nsfw_detector/
-├── ROADMAP.md              ← You are here
-├── main.py                 ← Config-driven training pipeline
-├── cnn.py                  ← SimpleCNN model definition
-├── data_loader.py          ← Custom Dataset, transforms, DataLoaders
-├── helper_utils.py         ← Plotting, utilities
-├── tuning.py               ← (Phase 3) Hyperparameter tuning
-├── evaluate.py             ← (Phase 2) Test-set evaluation, metrics
-├── grad_cam.py             ← (Phase 6) Grad-CAM visualization
-├── predict.py              ← (Phase 7) Single image inference
-├── transfer_cnn.py         ← (Phase 5) Transfer learning model
-├── export_onnx.py          ← (Phase 7) ONNX export
+├── roadmap.md                        ← You are here
+├── documents/
+│   └── phase5_residual_connections.md ← Skip connections learning doc
+├── client/
+│   ├── server.py                     ← FastAPI backend (ONNX inference)
+│   ├── start.py                      ← One-command launcher
+│   └── frontend/                     ← React frontend (upload + results)
+├── src/
+│   ├── main.py                       ← Phase 1: SimpleCNN training
+│   ├── cnn.py                        ← Phase 1: SimpleCNN model
+│   ├── cnn_tuned.py                  ← Phase 3: TunedCNN (Optuna-optimized)
+│   ├── residual_cnn_tuned.py         ← Phase 5: ResidualTunedCNN
+│   ├── train_tuned.py                ← Phase 3: TunedCNN training
+│   ├── train_residual.py             ← Phase 5: ResidualTunedCNN training
+│   ├── transfer_cnn.py               ← Phase 4: ResNet18 Strategy 1 (freeze all)
+│   ├── transfer_cnn_finetune.py      ← Phase 4: ResNet18 Strategy 2 (fine-tune)
+│   ├── transfer_cnn_fulltrain.py     ← Phase 4: ResNet18 Strategy 3 (full retrain)
+│   ├── tuning.py                     ← Phase 3: Optuna hyperparameter search
+│   ├── evaluate.py                   ← Phase 2: Test-set evaluation (all models)
+│   ├── grad_cam.py                   ← Phase 6: Grad-CAM visualization
+│   ├── export_onnx.py                ← Phase 7: ONNX export
+│   ├── prune.py                      ← Phase 7: Pruning + Quantization pipeline
+│   ├── data_loader.py                ← Shared data loading + transforms
+│   └── helper_utils.py               ← Shared utilities + progress bars
 └── data/
-    └── nsfw_dataset_v1/    ← Dataset (on Ubuntu training machine)
+    └── nsfw_dataset_v1/              ← Dataset
 ```
 
 ---
@@ -42,33 +55,33 @@ nsfw_detector/
  ✅ Phase 1 — Build & Train SimpleCNN
     │
     ▼
- 🔲 Phase 2 — Evaluate Baseline (test accuracy, confusion matrix, F1)
+ ✅ Phase 2 — Evaluate Baseline (test accuracy, confusion matrix, F1)
     │           → Know your starting point
     │           → Discover which classes are problematic
     │
     ▼
- 🔲 Phase 3 — Optuna Tuning (push SimpleCNN to its limit)
+ ✅ Phase 3 — Optuna Tuning (push SimpleCNN to its limit)
     │           → Use Phase 2 insights to guide search space
     │           → Compare with Phase 2 baseline
     │
     ▼
- 🔲 Phase 4 — Transfer Learning (biggest accuracy jump)
-    │           → ResNet18/MobileNetV3 pretrained on ImageNet
+ ✅ Phase 4 — Transfer Learning (biggest accuracy jump)
+    │           → ResNet18: 3 strategies (freeze/fine-tune/full retrain)
     │           → Compare with Phase 2 + Phase 3 results
     │
     ▼
- 🔲 Phase 5 — ResNet Skip Connections
-    │           → Add residual connections to your CNNBlock
+ ✅ Phase 5 — ResNet Skip Connections
+    │           → ResidualBlock: F(x) + x
     │           → Understand why deeper networks work
     │
     ▼
- 🔲 Phase 6 — Model Interpretability (Grad-CAM)
+ ✅ Phase 6 — Model Interpretability (Grad-CAM)
     │           → See where the model looks to make predictions
-    │           → Debug misclassifications visually
+    │           → Compare SimpleCNN vs ResNet18 heatmaps
     │
     ▼
- 🔲 Phase 7 — Export & Deployment (ONNX → Prune → Quantize)
-                → Export to ONNX, shrink model, benchmark speed
+ ✅ Phase 7 — Export & Deployment (ONNX → Prune → Quantize → Web App)
+                → Export to ONNX, deploy with FastAPI + React
 ```
 
 ---
@@ -94,7 +107,7 @@ nsfw_detector/
 | Device-aware (CUDA / MPS / CPU) | `main.py` — auto-detect | — |
 
 **Key design decisions:**
-- Input 128×128 — fast iteration on GTX 1650 (4GB VRAM), adequate for NSFW patterns
+- Input 128×128 — fast iteration with limited VRAM, adequate for NSFW patterns
 - `Resize((128, 128))` — forces square, keeps all content (distortion minimal at this resolution)
 - `label_smoothing=0.1` — prevents overconfident predictions
 - `AdamW` with `weight_decay=0.05` — better regularization than plain Adam
@@ -117,7 +130,8 @@ nsfw_detector/
 | Per-class precision/recall/F1 | `evaluate.py` — `classification_report()` | Accuracy hides problems — porn (F1=0.73) vs neutral (F1=0.59) shows huge gap between classes |
 | MLflow experiment tracking | `main.py` — `mlflow.log_params()`, `mlflow.log_metric()`, `mlflow.log_artifact()` | Every training run is automatically logged with params + metrics, no more manual spreadsheets |
 | Config-driven hyperparameters | `main.py` — `lr`, `weight_decay`, `label_smoothing` in CONFIG dict | No more magic numbers hardcoded — single source of truth at the top of the file |
-| `torch.compile()` portability fix | `main.py` — strip `_orig_mod.` prefix before saving | Training on CUDA with compile wraps model — must clean state_dict keys for Mac/Linux compatibility |
+| `torch.compile()` portability fix | `main.py` — strip `_orig_mod.` prefix before saving | Training with compile wraps model — must clean state_dict keys for cross-device compatibility |
+| Auto-detect model type | `evaluate.py` — detects SimpleCNN, TunedCNN, ResNet18 from checkpoint | One evaluate.py works for ALL models — no hardcoded model class |
 
 ### Baseline results (5 epochs, test mode)
 
@@ -131,22 +145,6 @@ nsfw_detector/
 │ Hentai recall:  0.57 (misses many)       │
 │ Model status:   underfitting             │
 └──────────────────────────────────────────┘
-```
-
-**Full classification report:**
-
-```
-              precision    recall  f1-score   support
-
-    drawings       0.64      0.61      0.62      1099
-      hentai       0.78      0.57      0.66      1099
-     neutral       0.57      0.61      0.59      1129
-        porn       0.71      0.75      0.73      1121
-        sexy       0.58      0.68      0.62      1152
-
-    accuracy                           0.64      5600
-   macro avg       0.66      0.64      0.64      5600
-weighted avg       0.65      0.64      0.64      5600
 ```
 
 ### Key takeaways for Phase 3
@@ -174,35 +172,14 @@ weighted avg       0.65      0.64      0.64      5600
 | MaxPool2d spatial shrinking | Bug: 5 layers × MaxPool2d → 2×2 → kernel doesn't fit → crash | Each MaxPool2d halves spatial size: 128→64→32→16→8→4. Too many layers = too small |
 | BatchNorm in conv blocks | `tuning.py` — `nn.BatchNorm2d(out_channels)` | Stabilizes training, especially important when trying many different architectures |
 | Optuna study + trials | `tuning.py` — `optuna.create_study`, `study.optimize` | Study = container for trials; direction='maximize' tells Optuna to find highest accuracy |
-| Saving Optuna study | `tuning.py` — `study.save("models/optuna_study.db")` | Can reload later with `optuna.load_study()` to analyze without retraining |
-| Retraining best model | `tuning.py` — rebuild with best params, train again, save checkpoint | Optuna only remembers hyperparameters, not the model. Must retrain with best params to get a usable model |
-| Progress tracking | `tuning.py` — print trial params, epoch loss, val accuracy per trial | 20 trials × 10 epochs = long running; console output lets you monitor progress |
+| Saving Optuna study | `tuning.py` — `joblib.dump(study, ...)` | Can reload later with `joblib.load()` to analyze without retraining |
+| Retraining best model | `tuning.py` — rebuild with best params, train again, save checkpoint | Optuna only remembers hyperparameters, not the model. Must retrain with best params |
+| Best accuracy per trial | `tuning.py` — track best val accuracy across epochs | Return peak accuracy, not final epoch — model might peak early then drop |
+| GPU-friendly filters | `tuning.py` — FILTER_CHOICES = [32, 64, 128, 256] | Powers of 2 are optimized on GPU; random values like 37 waste compute |
+| Ordered filter progression | Search space insight | Filters should increase monotonically: 32→64→128→256, not chaotic 16→128→64→128 |
+| `num_workers=4` on CUDA | `data_loader.py` — `num_workers` parameter | CPU pre-loads batches in parallel while GPU trains → no idle GPU time |
+| `train_fraction` for fast trials | `data_loader.py` — subset training data | Optuna doesn't need full data to rank configs; 30-50% is enough for comparison |
 | Dropout must use sampled value | Bug: hardcoded `p=0.6` instead of `p=self.dropout_rate` | If dropout isn't wired to Optuna's suggestion, it wastes trials searching a value that's ignored |
-
-### Search space used
-
-| Parameter | Search space | Type |
-|-----------|-------------|------|
-| Learning rate | `1e-4` to `1e-2` (log scale) | `suggest_float(log=True)` |
-| Num conv blocks | 2 to 5 | `suggest_int` |
-| Filters per layer | 16 to 128 per layer | `suggest_int` per layer |
-| Kernel size per layer | 3 or 5 per layer | `suggest_categorical` |
-| Dropout | 0.1 to 0.5 | `suggest_float` |
-| FC layer size | 64 to 256 | `suggest_int` |
-| Batch size | 32, 64, 128 | `suggest_categorical` |
-
-### After Optuna — record results
-
-```
-┌──────────────────────────────────────┐
-│ OPTUNA (Tuned FlexibleCNN)           │
-│ Best Accuracy:  XX.XX%               │
-│ Best params:    (see study results)  │
-│ Improvement vs baseline:  +X.X%      │
-│ Model saved:    best_flexible_cnn.pth│
-│ Study saved:    optuna_study.db      │
-└──────────────────────────────────────┘
-```
 
 ### Key takeaways for Phase 4
 - Optuna pushed SimpleCNN architecture to its limit
@@ -211,225 +188,154 @@ weighted avg       0.65      0.64      0.64      5600
 
 ---
 
-## Phase 4 — Transfer Learning 🔲
+## Phase 4 — Transfer Learning ✅
 
 **Goal:** Use a pretrained model for the biggest accuracy jump.
 
-**Build this file:** `transfer_cnn.py`
+**Built in:** `transfer_cnn.py`, `transfer_cnn_finetune.py`, `transfer_cnn_fulltrain.py`
 
-### Why transfer learning helps
+### What you practiced
 
-Your SimpleCNN learns edges → textures → patterns from 28K NSFW images. A pretrained ResNet18 learned edges → textures → objects → scenes from **1.2 million ImageNet images**. You reuse that knowledge.
+| Concept | Where in your code | What you learned |
+|---------|-------------------|-----------------|
+| Pretrained model loading | `transfer_cnn.py` — `tv_models.resnet18(weights=...)` | Don't train from scratch — reuse ImageNet knowledge (1.2M images) |
+| Strategy 1: Feature Extraction | `transfer_cnn.py` — freeze all, train only fc | Fastest, trains only ~2.5K params, good baseline |
+| Strategy 2: Fine-tuning | `transfer_cnn_finetune.py` — freeze early, train layer4 + fc | Best balance — reuses general features, adapts task-specific ones |
+| Strategy 3: Full Retraining | `transfer_cnn_fulltrain.py` — train everything | All 11.7M params trainable, risk of overfitting on 28K images |
+| Freezing layers | `transfer_cnn.py` — `param.requires_grad = False` | Frozen layers keep pretrained weights, unfrozen layers adapt to NSFW task |
+| ImageNet preprocessing | All 3 files — 224×224, ImageNet mean/std | Pretrained weights expect specific input normalization — mismatch = garbage predictions |
+| Model must be on device after replacing fc | Bug: `.to(device)` before fc replacement leaves new fc on CPU | New layers are created on CPU — must call .to(device) AFTER replacing layers |
+| Lower LR for transfer | `transfer_cnn_finetune.py` — lr=1e-5 | High LR destroys pretrained ImageNet weights in first epoch |
+| Overfitting detection | ResNet18 val=87% → test=79% (8.5% gap) | Bigger model + small dataset = overfitting. SimpleCNN (80% test) generalized better |
 
-### Three strategies (try all, compare)
-
-```python
-import torchvision.models as models
-
-# Load pretrained ResNet18
-resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-
-# Strategy 1: Feature Extraction (fastest)
-# Freeze everything, replace only the final layer
-for param in resnet.parameters():
-    param.requires_grad = False
-resnet.fc = nn.Linear(resnet.fc.in_features, 5)  # 5 NSFW classes
-
-# Strategy 2: Fine-tuning (best balance)
-# Freeze early layers, train later layers + new head
-for name, param in resnet.named_parameters():
-    if "layer4" not in name and "fc" not in name:
-        param.requires_grad = False
-
-# Strategy 3: Full Retraining (slowest, needs most data)
-# Replace head, train everything with small LR
-resnet.fc = nn.Linear(resnet.fc.in_features, 5)
-# Use lr=1e-4 (not 1e-3, or you destroy pretrained weights)
-```
-
-### Important: preprocessing must match
-
-Pretrained models expect specific input preprocessing. ResNet18 expects 224×224 with ImageNet normalization:
-
-```python
-# NOT your custom mean/std — use ImageNet values
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD  = [0.229, 0.224, 0.225]
-```
-
-You'll need to change input size from 128→224 for transfer learning. Or try MobileNetV3 which also supports 128×128.
-
-**Course reference:**
-- `L2-M2 transfer_learning/main.py` — **exact match**, shows all 3 strategies
-- `L2-M2 pre_processing/main.py` — preprocessing for pretrained models
-
-### After transfer learning — record results
+### Transfer learning results
 
 ```
-┌──────────────────────────────────────┐
-│ TRANSFER LEARNING (ResNet18)         │
-│ Strategy:        fine-tuning         │
-│ Test Accuracy:   XX.XX%              │
-│ Improvement vs   +X.X% vs Optuna     │
-│ Improvement vs   +X.X% vs baseline   │
-└──────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│ TRANSFER LEARNING COMPARISON                    │
+│                                                  │
+│ Strategy 1 (freeze all):      75.93% val         │
+│ Strategy 2 (fine-tune):       87.71% val         │
+│ Strategy 3 (full retrain):    (results pending)  │
+│                                                  │
+│ ResNet18 test:                79.16% (overfits!)  │
+│ SimpleCNN test:               80.32% (better!)    │
+│                                                  │
+│ Key insight: bigger model ≠ better on small data │
+│ 11.7M params vs 28K images → overfitting         │
+└──────────────────────────────────────────────────┘
 ```
+
+### Key takeaway
+- Transfer learning gave biggest val accuracy (87%) but overfit on test (79%)
+- SimpleCNN (80%) generalized better — right-sized model for 28K images
+- Optuna-tuned custom CNN could beat ResNet18 on this specific dataset
 
 ---
 
-## Phase 5 — ResNet Skip Connections 🔲
+## Phase 5 — ResNet Skip Connections ✅
 
-**Goal:** Understand WHY deeper models work better by adding residual connections.
+**Goal:** Understand WHY deeper networks work better by adding residual connections.
 
-**Modify:** `cnn.py`
+**Built in:** `residual_cnn_tuned.py`, `train_residual.py`
 
-### The problem without skip connections
+### What you practiced
 
-In deep networks, gradients vanish as they flow backward through many layers. Layer 1 barely receives a signal from the loss. The network "forgets" early features.
+| Concept | Where in your code | What you learned |
+|---------|-------------------|-----------------|
+| ResidualBlock with skip connection | `residual_cnn_tuned.py` — `ResidualBlock` | `out = F(x) + x` — model only learns the DELTA from identity |
+| Two convolutions per block | `residual_cnn_tuned.py` — conv1 + conv2 | Standard ResNet pattern: richer residual before skip |
+| MaxPool AFTER skip connection | Bug: MaxPool before skip caused shape mismatch crash | Skip operates on same spatial size, downsample after |
+| Shortcut projection | `residual_cnn_tuned.py` — 1×1 conv when channels change | Can't add 32 channels to 64 channels — 1×1 conv matches them |
+| Useless layers become identity | Residual theory | If F(x)=0, out=0+x=x — layer becomes transparent |
+| Vanishing gradients | Theory from `documents/phase5_residual_connections.md` | Without skip: gradients fade to 0 by layer 1. With skip: direct gradient path to every layer |
+| Going deeper is now possible | ResidualBlock unlocks depth | 5 layers with skip ~87%. 8-12 layers could reach 90%+ |
 
-### The solution: skip connections
+### Architecture
 
-```python
-class ResidualBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        
-        # If channels change, we need a projection for the skip
-        self.shortcut = nn.Sequential()
-        if in_channels != out_channels:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, 1),
-                nn.BatchNorm2d(out_channels)
-            )
-
-    def forward(self, x):
-        residual = self.shortcut(x)        # save input (with projection if needed)
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
-        out += residual                     # ← skip connection: add input back!
-        out = F.relu(out)
-        return out
+```
+ResidualTunedCNN: 5 ResidualBlocks [32→64→128→128→256]
+Each block: Conv→BN→ReLU→Conv→BN → (+skip) → ReLU → MaxPool
+Dropout: 0.358 (from Optuna)
+FC: 256→256→5
 ```
 
-**Course reference:** `L3-M1 resnet/main.py` — residual connections explained
+### Key takeaway
+- Skip connections don't automatically improve accuracy at 5 layers
+- They UNLOCK going deeper (8, 12, 18 layers) without vanishing gradients
+- Your custom ResidualTunedCNN could compete with ResNet18 from scratch
+- See `documents/phase5_residual_connections.md` for full learning document
 
 ---
 
-## Phase 6 — Model Interpretability 🔲
+## Phase 6 — Model Interpretability ✅
 
 **Goal:** See what the model has learned and where it looks.
 
-**Build this file:** `grad_cam.py`
+**Built in:** `grad_cam.py`
 
-### What you'll visualize
+### What you practiced
 
-| Visualization | What it shows | Answers the question |
-|--------------|---------------|---------------------|
-| **Conv filters** | Patterns each filter detects (edges, textures) | What has layer 1 learned? |
-| **Feature maps** | How an image transforms at each layer | How does data flow through the model? |
-| **Grad-CAM** | Heatmap of important regions for a prediction | Why did the model predict "porn" for this image? |
+| Concept | Where in your code | What you learned |
+|---------|-------------------|-----------------|
+| Grad-CAM heatmap generation | `grad_cam.py` — `GradCAM` class | Shows WHERE the model focuses for each prediction (red=important, blue=ignored) |
+| Forward/backward hooks | `grad_cam.py` — `register_forward_hook`, `register_full_backward_hook` | Capture activations and gradients during forward/backward pass without modifying model |
+| Comparing models visually | `grad_cam.py` — side-by-side SimpleCNN vs ResNet18 heatmaps | ResNet18 focuses on meaningful regions, SimpleCNN scatters attention |
+| Per-class grid visualization | `grad_cam.py` — `generate_class_grid()` | 5 images per class × 3 columns (original, SimpleCAM, ResNet18 CAM) |
+| Sensitive content handling | `grad_cam.py` — grayscale + adjustable blur | Can visualize model behavior without viewing explicit content |
+| Target layer selection | SimpleCNN: `conv_block3.block[0]`, ResNet18: `layer4[1].conv2` | Must pick the last conv layer — that's where spatial info exists |
 
-### Grad-CAM for debugging
-
-When your model misclassifies `sexy` as `porn`:
-- If Grad-CAM focuses on face/hands → model learned person features (reasonable)
-- If Grad-CAM focuses on random background → model learned spurious correlation (fix needed)
-- If Grad-CAM focuses on body → model is using the right features but boundary is unclear
-
-**Course reference:**
-- `L3-M2 interpreting/main.py` — filter + feature map visualization
-- `L3-M2 saliency_and_class_activation_map/main.py` — Grad-CAM implementation
+### Key takeaway
+- Grad-CAM reveals WHY models make mistakes (looking at wrong regions)
+- ResNet18's focused heatmaps explain its higher accuracy
+- Your SimpleCNN's scattered heatmaps explain its confusion between similar classes
 
 ---
 
-## Phase 7 — Export & Deployment 🔲
+## Phase 7 — Export & Deployment ✅
 
 **Goal:** Ship your model — export, shrink, and benchmark.
 
-### Step 7a — ONNX export
+**Built in:** `export_onnx.py`, `prune.py`, `client/` (FastAPI + React)
 
-**Build this file:** `export_onnx.py`
+### What you practiced
 
-```python
-# Load your best model
-model = SimpleCNN(num_classes=5)
-model.load_state_dict(torch.load("best_simple_cnn_train.pth")["model_state_dict"])
-model.eval()
+| Concept | Where in your code | What you learned |
+|---------|-------------------|-----------------|
+| ONNX export | `export_onnx.py` — `torch.onnx.export()` | .pth → .onnx makes model portable to any language/platform |
+| ONNX is like PDF | `client/server.py` — `onnxruntime` loads model | .pth needs PyTorch (GB of deps), .onnx needs only onnxruntime (~50MB) |
+| Pruning (L1 unstructured) | `prune.py` — `prune.l1_unstructured()` | Remove smallest weights → sparser model → faster inference |
+| Quantization (FP32→INT8) | `prune.py` — `quantize_dynamic()` | 4× smaller weights, 2-4× faster, ~1% accuracy loss |
+| Pruning on small models | 30% prune → 22% accuracy drop | Small models can't afford aggressive pruning — already minimal |
+| Fine-tuning after pruning | `prune.py` — 3 epochs recovered 76% from 57% | Pruning damages learned features, fine-tuning recovers them |
+| FastAPI backend | `client/server.py` — `/predict` endpoint | Standard industry pattern: React → FastAPI → ONNX → prediction |
+| React frontend | `client/frontend/` — upload + confidence bars | Drag & drop upload, shows prediction + all class probabilities |
+| One-command deployment | `client/start.py` | Spawns backend + frontend, handles Ctrl+C gracefully |
+| Preprocessing must match training | `server.py` — INPUT_SIZE=128, NSFW mean/std | Wrong normalization = garbage predictions. #1 deployment bug |
+| ONNX works in JavaScript too | onnxruntime-web, onnxruntime-node | ONNX is cross-platform: Python, JS, C++, Java, browser |
+| Model size comparison | SimpleCNN=648KB, TunedCNN=2.3MB, ResNet18=43MB | Size grows quadratically with channel count, not linearly with layers |
 
-# Create dummy input
-dummy_input = torch.randn(1, 3, 128, 128)
-
-# Export
-torch.onnx.export(
-    model, dummy_input,
-    "nsfw_detector.onnx",
-    input_names=["image"],
-    output_names=["logits"],
-    dynamic_axes={"image": {0: "batch"}, "logits": {0: "batch"}}
-)
-```
-
-**Course reference:** `L3-M4 ONNX/main.py`
-
-### Step 7b — Pruning (remove unnecessary weights)
-
-Remove weights that contribute little to predictions:
-
-```python
-import torch.nn.utils.prune as prune
-
-# Prune 30% of smallest weights in each conv layer
-for module in model.modules():
-    if isinstance(module, nn.Conv2d):
-        prune.l1_unstructured(module, name="weight", amount=0.3)
-```
-
-**Course reference:** `L3-M4 pruning/main.py`
-
-### Step 7c — Quantization (FP32 → INT8)
-
-Make model 4× smaller and 2-4× faster:
-
-```python
-import torch.quantization as quant
-
-model_quantized = quant.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)
-```
-
-**Course reference:** `L3-M4 quantization/main.py`
-
-### Step 7d — Inference script
-
-**Build this file:** `predict.py`
-
-```python
-# Usage: python predict.py path/to/image.jpg
-# Output: "porn (95.2% confidence)"
-```
-
-Load ONNX model with `onnxruntime`, preprocess image, run inference, print result.
-
-### Step 7e — Full pipeline (prune → quantize → benchmark)
-
-**Course reference:** `L3-M4 metro_city/main.py` — end-to-end optimization pipeline
-
-### After deployment — record final results
+### Deployment results
 
 ```
 ┌──────────────────────────────────────────────┐
 │ DEPLOYMENT                                   │
-│ Model format:     ONNX                       │
-│ Original size:    XX MB (.pth)               │
-│ ONNX size:        XX MB (.onnx)              │
-│ Quantized size:   XX MB (INT8)               │
-│ Inference speed:  XX ms per image            │
-│ Accuracy kept:    XX.XX% (same as training?) │
+│ Model format:     ONNX (29 KB)               │
+│ Original size:    648 KB (.pth)               │
+│ ONNX size:        29 KB (.onnx)               │
+│ Pruned ONNX:      26 KB (30% pruned)          │
+│ Accuracy:         80.32% (SimpleCNN test)     │
+│ Frontend:         React (port 3000)           │
+│ Backend:          FastAPI (port 8000)         │
+│ Note:             Model too small for pruning │
+│                   to provide meaningful gain  │
 └──────────────────────────────────────────────┘
 ```
+
+### Key takeaway
+- Pruning/quantization matter for BIG models (>50MB). Small models are already optimal.
+- ONNX + FastAPI + React is the standard ML deployment stack
+- Always match training preprocessing in deployment
 
 ---
 
@@ -442,13 +348,13 @@ Load ONNX model with `onnxruntime`, preprocess image, run inference, print resul
 | 2b | Confusion matrix | `evaluate.py` | L3-M4 `MLflow/main.py` | ✅ Done |
 | 2c | Per-class precision/recall/F1 | `evaluate.py` | L2-M1 `learning_rate/main.py` | ✅ Done |
 | 3 | Optuna hyperparameter tuning | `tuning.py` | L2-M1 `optuna/main.py` | ✅ Done |
-| 4 | Transfer learning (ResNet18/MobileNetV3) | `transfer_cnn.py` | L2-M2 `transfer_learning/main.py` | 🔲 |
-| 5 | ResNet skip connections | modify `cnn.py` | L3-M1 `resnet/main.py` | 🔲 |
-| 6 | Grad-CAM interpretability | `grad_cam.py` | L3-M2 `saliency_and_class_activation_map/main.py` | 🔲 |
-| 7a | ONNX export | `export_onnx.py` | L3-M4 `ONNX/main.py` | 🔲 |
-| 7b | Pruning | modify `cnn.py` | L3-M4 `pruning/main.py` | 🔲 |
-| 7c | Quantization | modify `cnn.py` | L3-M4 `quantization/main.py` | 🔲 |
-| 7d | Inference script | `predict.py` | L3-M4 `metro_city/main.py` | 🔲 |
+| 4 | Transfer learning (ResNet18) | `transfer_cnn.py`, `transfer_cnn_finetune.py`, `transfer_cnn_fulltrain.py` | L2-M2 `transfer_learning/main.py` | ✅ Done |
+| 5 | ResNet skip connections | `residual_cnn_tuned.py`, `train_residual.py` | L3-M1 `resnet/main.py` | ✅ Done |
+| 6 | Grad-CAM interpretability | `grad_cam.py` | L3-M2 `saliency_and_class_activation_map/main.py` | ✅ Done |
+| 7a | ONNX export | `export_onnx.py` | L3-M4 `ONNX/main.py` | ✅ Done |
+| 7b | Pruning | `prune.py` | L3-M4 `pruning/main.py` | ✅ Done |
+| 7c | Quantization | `prune.py` | L3-M4 `quantization/main.py` | ✅ Done |
+| 7d | Web deployment | `client/server.py`, `client/frontend/` | — | ✅ Done |
 
 ---
 
@@ -463,3 +369,26 @@ Baseline → evaluate → tune → evaluate → upgrade → evaluate → deploy 
 ```
 
 Never move to the next phase without recording your current results. That's how you learn what actually works.
+
+---
+
+## Final Results Summary
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ MODEL COMPARISON (Test Accuracy)                         │
+│                                                          │
+│ SimpleCNN baseline (3 layers, 5 epochs):      64.36%    │
+│ SimpleCNN trained (3 layers, 40 epochs):      80.32%    │
+│ TunedCNN (5 layers, Optuna):                  ~87% val  │
+│ ResidualTunedCNN (5 residual blocks):         (pending) │
+│ ResNet18 Strategy 1 (freeze all):             75.93% val │
+│ ResNet18 Strategy 2 (fine-tune):              87.71% val │
+│ ResNet18 test:                                79.16%    │
+│                                                          │
+│ Key insight: SimpleCNN (80.32% test) beat ResNet18       │
+│ (79.16% test) on this dataset. Right-sized model wins.   │
+│                                                          │
+│ Deployed as ONNX (29 KB) via FastAPI + React web app.    │
+└──────────────────────────────────────────────────────────┘
+```

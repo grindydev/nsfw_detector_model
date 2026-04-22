@@ -104,4 +104,17 @@ dmypy.json
 # Test data
 data/
 
+# Generated outputs
 grad_cam_results/
+
+# Large model files
+models/*.pth
+models/*.onnx
+models/*.pkl
+models/*.db
+
+# Frontend
+client/frontend/node_modules/
+
+# MLflow
+mlruns/
