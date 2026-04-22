@@ -22,16 +22,17 @@ from fastapi.responses import StreamingResponse
 from PIL import Image
 
 # ==================== CONFIG ====================
-# Adjust these based on which model you exported to ONNX
-INPUT_SIZE = 128                        # 128 for SimpleCNN, 224 for TunedCNN/Residual/ResNet
-MEAN = [0.5973, 0.5313, 0.5066]         # NSFW dataset (for SimpleCNN)
-STD = [0.2896, 0.2808, 0.2854]          # Use [0.485, 0.456, 0.406] / [0.229, 0.224, 0.225] for TunedCNN/Residual
 MODEL_PATH = Path(__file__).parent.parent / "models" / "nsfw_detector.onnx"
 CLASS_NAMES = ["drawings", "hentai", "neutral", "porn", "sexy"]
 NSFW_CLASSES = {"hentai", "porn", "sexy"}
 VIDEO_FRAME_INTERVAL = 1       # extract 1 frame per second
 NSFW_THRESHOLD = 0.5           # flag if confidence > 50% for NSFW class
 # ================================================
+
+# Auto-detected from ONNX model (overridden on startup)
+INPUT_SIZE = 128
+MEAN = [0.5973, 0.5313, 0.5066]         # NSFW dataset default
+STD = [0.2896, 0.2808, 0.2854]
 
 app = FastAPI(title="NSFW Detector API")
 
@@ -52,9 +53,23 @@ else:
     session = ort.InferenceSession(str(MODEL_PATH))
     input_info = session.get_inputs()[0]
     output_info = session.get_outputs()[0]
+
+    # Auto-detect input size from ONNX model shape
+    model_h = input_info.shape[-1]
+    if isinstance(model_h, int) and model_h > 128:
+        INPUT_SIZE = 224
+        MEAN = [0.485, 0.456, 0.406]
+        STD = [0.229, 0.224, 0.225]
+
+    # Read model type from ONNX metadata
+    model_meta = session.get_modelmeta()
+    MODEL_TYPE = model_meta.custom_metadata_map.get("model_type", "Unknown")
+
     print(f"✅ Model loaded")
+    print(f"   Type:   {MODEL_TYPE}")
     print(f"   Input:  {input_info.name} {input_info.shape}")
     print(f"   Output: {output_info.name} {output_info.shape}")
+    print(f"   Input size: {INPUT_SIZE}×{INPUT_SIZE} ({'ImageNet' if INPUT_SIZE == 224 else 'NSFW'} normalization)")
 
 
 def preprocess_image(image: Image.Image) -> np.ndarray:
@@ -88,11 +103,32 @@ def softmax(logits: np.ndarray) -> np.ndarray:
 @app.get("/")
 def root():
     """API info and model status."""
-    return {
+    info = {
         "name": "NSFW Detector API",
         "model_loaded": session is not None,
         "model_path": str(MODEL_PATH),
         "input_size": INPUT_SIZE,
+        "classes": CLASS_NAMES,
+        "normalization": "ImageNet" if INPUT_SIZE == 224 else "NSFW dataset",
+    }
+    if MODEL_PATH.exists():
+        info["model_size_kb"] = round(MODEL_PATH.stat().st_size / 1024, 1)
+    return info
+
+
+@app.get("/model-info")
+def model_info():
+    """Model info for frontend UI."""
+    if session is None:
+        return {"loaded": False}
+    return {
+        "loaded": True,
+        "model_type": MODEL_TYPE,
+        "input_size": INPUT_SIZE,
+        "normalization": "ImageNet" if INPUT_SIZE == 224 else "NSFW dataset",
+        "model_size_kb": round(MODEL_PATH.stat().st_size / 1024, 1) +
+                       round((MODEL_PATH.parent / (MODEL_PATH.name + '.data')).stat().st_size / 1024, 1)
+                       if MODEL_PATH.exists() else 0,
         "classes": CLASS_NAMES,
     }
 

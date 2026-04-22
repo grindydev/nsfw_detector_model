@@ -20,16 +20,35 @@ def main():
         print("✅ Dependencies installed\n")
 
     # Check if model exists
-    model_path = os.path.join(base_dir, "..", "models", "nsfw_detector.onnx")
-    if not os.path.exists(model_path):
+    onnx_main = os.path.join(base_dir, "..", "models", "nsfw_detector.onnx")
+    onnx_data = onnx_main + ".data"
+    if not os.path.exists(onnx_main):
         print("⚠️  WARNING: models/nsfw_detector.onnx not found!")
         print("   Run export_onnx.py first to create the ONNX model.")
         print("   Starting anyway (backend will return errors until model exists).\n")
+    else:
+        total_kb = os.path.getsize(onnx_main) / 1024
+        if os.path.exists(onnx_data):
+            total_kb += os.path.getsize(onnx_data) / 1024
+        print(f"📦 Model: nsfw_detector.onnx ({total_kb:.0f} KB total)")
 
+        try:
+            import onnxruntime as ort
+            sess = ort.InferenceSession(onnx_main)
+            model_type = sess.get_modelmeta().custom_metadata_map.get("model_type", "Unknown")
+            input_shape = sess.get_inputs()[0].shape
+            input_size = input_shape[-1]
+            print(f"   Type: {model_type} ({input_size}×{input_size})")
+            print(f"   Classes: drawings, hentai, neutral, porn, sexy")
+        except Exception:
+            pass
+
+    print()
     print("🚀 Starting NSFW Detector...")
     print("   Frontend: http://localhost:3000")
     print("   Backend:  http://localhost:8000")
-    print("   Press Ctrl+C to stop both\n")
+    print("   Press Ctrl+C to stop both")
+    print()
 
     # Start backend
     backend = subprocess.Popen(

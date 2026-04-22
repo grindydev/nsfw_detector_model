@@ -4,14 +4,20 @@ A deep learning project that classifies images into 5 categories: `drawings`, `h
 
 ## Results
 
-| Model | Test Accuracy | Size |
-|-------|--------------|------|
-| SimpleCNN (40 epochs) | **80.32%** | 648 KB |
-| ResNet18 Transfer (fine-tune) | 79.16% | 43 MB |
-| ResNet18 Transfer (freeze all) | 75.93% | 43 MB |
-| SimpleCNN (5 epochs baseline) | 64.36% | 648 KB |
+All models evaluated on the same 5,600 image test set (20% of 28K dataset).
 
-**Key insight:** SimpleCNN outperformed ResNet18 on this 28K image dataset — bigger model ≠ better on small data.
+| Model | Test Accuracy | Val Accuracy | Size | Params |
+|-------|:------------:|:------------:|-----:|-------:|
+| SimpleCNN (3 layers) | **80.18%** | 78.45% | 645 KB | 162K |
+| ResNet18 Transfer (fine-tune) | 79.43% | 87.71% | 43 MB | 11.7M |
+| FlexibleCNN (Optuna) | 79.27% | 78.21% | 814 KB | 210K |
+| TunedCNN (5 layers, Optuna) | 77.20% | 87.98% | 2.3 MB | 593K |
+| ResidualTunedCNN (skip connections) | 75.66% | 88.19% | 6.1 MB | 1.6M |
+
+**Key insights:**
+- **SimpleCNN (80.18%)** generalizes best — right-sized model for 28K images wins
+- TunedCNN and ResidualTunedCNN overfit (val 88% → test 75-77%) — too complex for this dataset
+- ResNet18 Transfer also overfits (val 87% → test 79%) despite pretrained weights
 
 ## Dataset
 
@@ -48,6 +54,7 @@ data/
 
 ```bash
 # 1. Export model to ONNX (one time)
+#    Auto-detects model type (SimpleCNN / TunedCNN / ResidualTunedCNN / ResNet18)
 cd src/
 python export_onnx.py
 
@@ -57,7 +64,13 @@ pip install -r requirements.txt
 python start.py
 ```
 
-Open http://localhost:3000 — upload an image to classify it.
+Open http://localhost:3000 — upload an **image** to classify, or a **video** to scan frame-by-frame for NSFW content.
+
+**Prerequisite:** `ffmpeg` must be installed for video scanning.
+```bash
+brew install ffmpeg      # Mac
+sudo apt install ffmpeg  # Linux
+```
 
 ### Train a Model
 
@@ -104,9 +117,9 @@ python tuning.py          # Optuna searches best architecture
 │   └── helper_utils.py           # Progress bars, plotting, utilities
 │
 ├── client/
-│   ├── server.py                 # FastAPI backend (ONNX inference)
+│   ├── server.py                 # FastAPI backend (image + video inference)
 │   ├── start.py                  # One-command launcher
-│   └── frontend/                 # React frontend
+│   └── frontend/                 # React frontend (image + video upload)
 │
 ├── documents/
 │   └── phase5_residual_connections.md
@@ -131,6 +144,8 @@ python tuning.py          # Optuna searches best architecture
 - fastapi
 - uvicorn
 - onnxruntime
+- Pillow
+- ffmpeg (system install, for video scanning)
 - Node.js 18+ (frontend)
 
 ## What I Learned

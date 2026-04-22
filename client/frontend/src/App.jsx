@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import './App.css'
 
 const CLASS_NAMES = ['drawings', 'hentai', 'neutral', 'porn', 'sexy']
@@ -37,6 +37,17 @@ function App() {
   const [currentFrame, setCurrentFrame] = useState(null)
   const [isNsfw, setIsNsfw] = useState(false)
   const [revealedFrames, setRevealedFrames] = useState(new Set())
+  const [filterCategory, setFilterCategory] = useState('all')
+
+  // Model info from backend
+  const [modelInfo, setModelInfo] = useState(null)
+
+  useEffect(() => {
+    fetch('/model-info')
+      .then(res => res.json())
+      .then(data => { if (data.loaded) setModelInfo(data) })
+      .catch(() => {})
+  }, [])
 
   const reset = useCallback(() => {
     setMode(null)
@@ -53,6 +64,7 @@ function App() {
     setCurrentFrame(null)
     setIsNsfw(false)
     setRevealedFrames(new Set())
+    setFilterCategory('all')
   }, [previewUrl])
 
   // ─── Image prediction ───────────────────────────
@@ -191,6 +203,19 @@ function App() {
     })
   }
 
+  // Filter flagged frames by selected category
+  const filteredFrames = filterCategory === 'all'
+    ? flaggedFrames
+    : flaggedFrames.filter(f => (f.nsfw_classes || {})[filterCategory] > 0)
+
+  // Count frames per NSFW category
+  const nsfwCounts = { all: flaggedFrames.length }
+  for (const f of flaggedFrames) {
+    for (const cls of Object.keys(f.nsfw_classes || {})) {
+      nsfwCounts[cls] = (nsfwCounts[cls] || 0) + 1
+    }
+  }
+
   // ─── Render helpers ─────────────────────────────
   const renderImageResults = () => (
     <div className="results">
@@ -295,40 +320,65 @@ function App() {
       {/* Flagged frames with images */}
       {flaggedFrames.length > 0 && (
         <div className="flagged-section">
-          <h3>🚩 Flagged Frames ({flaggedFrames.length})</h3>
-          <div className="flagged-grid">
-            {flaggedFrames.map((f, idx) => (
-              <div
-                key={idx}
-                className={`flagged-card ${revealedFrames.has(idx) ? 'revealed' : ''}`}
-                onClick={() => toggleReveal(idx)}
+          <div className="flagged-header">
+            <h3>🚩 Flagged Frames ({filteredFrames.length})</h3>
+            <div className="filter-tabs">
+              <button
+                className={`filter-tab ${filterCategory === 'all' ? 'active' : ''}`}
+                onClick={() => setFilterCategory('all')}
               >
-                <div className="flagged-thumb">
-                  <img
-                    src={`data:image/jpeg;base64,${f.image}`}
-                    alt={`Frame at ${f.timestamp}s`}
-                  />
-                  {!revealedFrames.has(idx) && <div className="blur-overlay" />}
-                </div>
-                <div className="flagged-info">
-                  <span className="flagged-time">@{f.timestamp}s</span>
-                  <div className="flagged-badges">
-                    {Object.entries(f.nsfw_classes || {}).map(([cls, conf]) => (
-                      <span
-                        key={cls}
-                        className="flagged-badge"
-                        style={{ backgroundColor: CLASS_COLORS[cls] + '33', color: CLASS_COLORS[cls] }}
-                      >
-                        {CLASS_LABELS[cls]} {(conf * 100).toFixed(0)}%
-                      </span>
-                    ))}
+                All ({nsfwCounts.all})
+              </button>
+              {['hentai', 'porn', 'sexy'].map(cls => (
+                nsfwCounts[cls] ? (
+                  <button
+                    key={cls}
+                    className={`filter-tab ${filterCategory === cls ? 'active' : ''}`}
+                    onClick={() => setFilterCategory(cls)}
+                    style={filterCategory === cls ? { borderColor: CLASS_COLORS[cls], color: CLASS_COLORS[cls] } : {}}
+                  >
+                    {CLASS_LABELS[cls]} ({nsfwCounts[cls]})
+                  </button>
+                ) : null
+              ))}
+            </div>
+          </div>
+          <div className="flagged-grid">
+            {filteredFrames.map((f, idx) => {
+              const originalIdx = flaggedFrames.indexOf(f)
+              return (
+                <div
+                  key={originalIdx}
+                  className={`flagged-card ${revealedFrames.has(originalIdx) ? 'revealed' : ''}`}
+                  onClick={() => toggleReveal(originalIdx)}
+                >
+                  <div className="flagged-thumb">
+                    <img
+                      src={`data:image/jpeg;base64,${f.image}`}
+                      alt={`Frame at ${f.timestamp}s`}
+                    />
+                    {!revealedFrames.has(originalIdx) && <div className="blur-overlay" />}
                   </div>
-                  <span className="reveal-hint">
-                    {revealedFrames.has(idx) ? '👁 Hide' : '🔒 Click to reveal'}
-                  </span>
+                  <div className="flagged-info">
+                    <span className="flagged-time">@{f.timestamp}s</span>
+                    <div className="flagged-badges">
+                      {Object.entries(f.nsfw_classes || {}).map(([cls, conf]) => (
+                        <span
+                          key={cls}
+                          className="flagged-badge"
+                          style={{ backgroundColor: CLASS_COLORS[cls] + '33', color: CLASS_COLORS[cls] }}
+                        >
+                          {CLASS_LABELS[cls]} {(conf * 100).toFixed(0)}%
+                        </span>
+                      ))}
+                    </div>
+                    <span className="reveal-hint">
+                      {revealedFrames.has(originalIdx) ? '👁 Hide' : '🔒 Click to reveal'}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -340,6 +390,13 @@ function App() {
       <div className="container">
         <h1>🔍 NSFW Detector</h1>
         <p className="subtitle">Upload an image or video to classify its content</p>
+        {modelInfo && (
+          <div className="model-info">
+            <span className="model-badge model-name">{modelInfo.model_type}</span>
+            <span className="model-badge">📦 {modelInfo.model_size_kb.toFixed(0)} KB</span>
+            <span className="model-badge">🖼 {modelInfo.input_size}×{modelInfo.input_size}</span>
+          </div>
+        )}
 
         {!previewUrl ? (
           <div

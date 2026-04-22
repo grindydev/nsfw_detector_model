@@ -8,9 +8,9 @@ export default defineConfig({
     proxy: {
       '/predict-video': {
         target: 'http://localhost:8000',
-        // SSE must not be buffered by the proxy
       },
       '/predict': 'http://localhost:8000',
+      '/model-info': 'http://localhost:8000',
     }
   }
 })

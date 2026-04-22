@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import torchvision.models as tv_models
 from cnn import SimpleCNN
+from cnn_tuned import TunedCNN
+from residual_cnn_tuned import ResidualTunedCNN
 from data_loader import get_dataloaders
 from pathlib import Path
 
@@ -46,8 +48,16 @@ elif 'conv1.weight' in state_dict:
     model = tv_models.resnet18()
     model.fc = nn.Linear(model.fc.in_features, num_classes)
     print(f"   Model type  : ResNet18 (Transfer Learning)")
+elif any('shortcut' in k for k in state_dict):
+    # ResidualTunedCNN (has skip connections)
+    model = ResidualTunedCNN(num_classes=num_classes)
+    print(f"   Model type  : ResidualTunedCNN")
+elif 'conv_block5.block.0.weight' in state_dict:
+    # TunedCNN (5 layers)
+    model = TunedCNN(num_classes=num_classes)
+    print(f"   Model type  : TunedCNN")
 else:
-    # SimpleCNN
+    # SimpleCNN (3 layers)
     model = SimpleCNN(num_classes=num_classes)
     print(f"   Model type  : SimpleCNN")
 
